@@ -1,4 +1,4 @@
-**Title :** Bot Cerate For Discord - Local (BCFD-L)
+**Title :** Bot Create For Discord - Local (BCFD-L)
 
 **Beta release:** '1.0.0.00'
 1 = Interface
