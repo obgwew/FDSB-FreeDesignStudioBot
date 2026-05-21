@@ -13,7 +13,7 @@
 **Notes:**
 
 - Some features require a restart to take effect.
-- The built-in command set is intentionally minimal — FDScript itself handles the heavy lifting.
+- The built-in command set is function ready - FDScript itself handles the heavy lifting.
 - Very large or deeply nested scripts may produce unexpected behavior.
 
 ---
