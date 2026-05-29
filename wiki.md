@@ -894,17 +894,7 @@ $endif
 $randomstr[Warrior; Mage; Rogue; Healer]
 ```
 
----
-
-### Embed announcement
-
-```
-$embed[Server Update; Maintenance starts at 10 PM.; e67e22]
-```
-
-Output: A Discord embed with an orange sidebar, the given title and description.
-
----
+---
 
 ### DM a specific user
 
