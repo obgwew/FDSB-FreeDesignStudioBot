@@ -630,8 +630,7 @@ Hello!
 ## break
 
 Exits the nearest enclosing `$while` or `$for` loop immediately. Using `$break` outside a loop is a logic error caught at validation time.
-
-> ⚠️ `$break` is experimental and may behave unexpectedly in some cases.
+
 
 ```
 $break
