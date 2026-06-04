@@ -12,9 +12,9 @@
 
 **Notes:**
 
-- Some features require a restart to take effect.
-- The built-in command set is intentionally minimal — FDScript itself handles the heavy lifting.
-- Very large or deeply nested scripts may produce unexpected behavior.
+- Some thims require a restart to take effect.
+- The built-in command set is intentionally minimal – FDScript handles the heavy lifting.
+- While FDSrcipt gen 2 offers greater command-line processing capabilities, it's important to note that some poorly planned complexities may produce undesirable results (please report any such issues).
 
 ---
 
@@ -22,7 +22,7 @@
 
 - **1.0.0** — Initial beta release
   - New interface
-  - New language (FDScript)
+  - New language (FDScript) Gen 0
   - New control mechanism
 
 - **1.0.1** — Patch
@@ -33,7 +33,7 @@
 
 - **2.0.0** — Feature update
   - Improved UI
-  - Added 5 new commands
+  - new FDScript Gen 1
   - Fixed bot file conflicts
   - Added settings panel
   - Added theme support
@@ -45,6 +45,11 @@
   - fixed input's in settings_view 
   - replace icon kivy to BCFD
 
----
+- **2.1.0** — Task integration & event commands
+  - add a new commands of admin's (Basic Discord commands)
+  - add a new event command
+  - upload/download data bot for any someone
+  - FDScript gen 2 development
+  - fixed some commands
 
 **Developers:** @y.lw (contributor) · @o_bg (programming)

@@ -770,7 +770,3 @@ class BCFDApp(App):
         sm.add_widget(dashboard)
 
         return sm
-
-
-if __name__ == '__main__':
-    BCFDApp().run()
