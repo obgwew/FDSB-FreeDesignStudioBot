@@ -1,33 +1,22 @@
+# Copyright (C) 2026 obgwew
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 # -*- coding: utf-8 -*-
-# main.py  (root)
+# BCFD.py (root) . Flet 0.80+ / v1 API
 
 import os
 import webbrowser
-import sys
 import json
 import shutil
 import logging
+import asyncio
 
-from kivy.app import App
-from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.floatlayout import FloatLayout
-from kivy.uix.button import Button
-from kivy.uix.label import Label
-from kivy.uix.textinput import TextInput
-from kivy.uix.popup import Popup
-from kivy.uix.scrollview import ScrollView
-from kivy.uix.gridlayout import GridLayout
-from kivy.uix.screenmanager import ScreenManager, Screen
-from kivy.uix.image import Image
-from plyer import filechooser
-from kivy.core.window import Window
-from kivy.utils import get_color_from_hex
-from kivy.metrics import dp
-from kivy.graphics import Color, RoundedRectangle, Line, Ellipse
-from kivy.core.text import LabelBase
+import flet as ft
 
 from main_exe.langs.translations import Translations
 from main_exe.settings import get_current_lang, get_current_theme, apply_theme_globally
+from main_exe.theme_engine import ThemeEngine
+from main_exe.main import BotDashboardScreen
 
 logging.getLogger('discord').setLevel(logging.INFO)
 
@@ -45,58 +34,8 @@ icon_path = os.path.join(
 def _t(key: str) -> str:
     return Translations.get(key, get_current_lang())
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  FONTS
-# ══════════════════════════════════════════════════════════════════════════════
-
-_FONTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'main_exe', 'langs', 'fonts')
-REGISTERED_FONT: str = ''
-
-
-def _apply_default_font(font_name: str):
-    Label.font_name.defaultvalue     = font_name
-    Button.font_name.defaultvalue    = font_name
-    TextInput.font_name.defaultvalue = font_name
-
-
-def register_all_fonts(fonts_dir: str = _FONTS_DIR) -> list:
-    global REGISTERED_FONT
-
-    if not os.path.isdir(fonts_dir):
-        print(f"[Fonts] mجلد الخطوط غير موجود: {fonts_dir}")
-        return []
-
-    fonts = sorted([
-        f for f in os.listdir(fonts_dir)
-        if f.lower().endswith(('.ttf', '.otf'))
-    ])
-
-    if not fonts:
-        print(f"[Fonts] لا توجد خطوط في: {fonts_dir}")
-        return []
-
-    registered = []
-    for file in fonts:
-        font_path = os.path.join(fonts_dir, file)
-        font_name = os.path.splitext(file)[0]
-        try:
-            LabelBase.register(name=font_name, fn_regular=font_path)
-            registered.append(font_name)
-            print(f"[Fonts] OK {font_name}")
-        except Exception as e:
-            print(f"[Fonts] FAIL {font_name}: {e}")
-
-    if registered:
-        REGISTERED_FONT = registered[0]
-        _apply_default_font(REGISTERED_FONT)
-        print(f"[Fonts] الخط الافتراضي: {REGISTERED_FONT}")
-
-    return registered
-
-
-register_all_fonts()
-
+def _ar(text: str) -> str:
+    return text
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  STORAGE
@@ -110,17 +49,14 @@ def ensure_app_data_dir():
 
 
 def get_bot_dir(bot_name: str) -> str:
-    safe_name = "".join(c for c in bot_name if c.isalnum() or c in (' ', '-', '_')).strip()
-    safe_name = safe_name.replace(' ', '_') or 'bot'
-    return os.path.join(APP_DATA_DIR, safe_name)
+    safe = "".join(c for c in bot_name if c.isalnum() or c in (' ', '-', '_')).strip()
+    return os.path.join(APP_DATA_DIR, safe.replace(' ', '_') or 'bot')
 
 
 def save_bot_data(bot_data: dict) -> dict:
     ensure_app_data_dir()
-
     bot_dir       = get_bot_dir(bot_data.get('name', 'bot'))
     bot_files_dir = os.path.join(bot_dir, 'bot_files')
-
     os.makedirs(bot_dir,       exist_ok=True)
     os.makedirs(bot_files_dir, exist_ok=True)
 
@@ -137,18 +73,14 @@ def save_bot_data(bot_data: dict) -> dict:
         'token': bot_data.get('token', ''),
         'image': saved_image_path,
     }
-
-    config_path = os.path.join(bot_files_dir, 'config.json')
-    with open(config_path, 'w', encoding='utf-8') as f:
+    with open(os.path.join(bot_files_dir, 'config.json'), 'w', encoding='utf-8') as f:
         json.dump(config, f, ensure_ascii=False, indent=2)
-
     return config
 
 
 def load_all_bots() -> list:
     ensure_app_data_dir()
     bots = []
-
     for entry in os.scandir(APP_DATA_DIR):
         if not entry.is_dir():
             continue
@@ -162,14 +94,14 @@ def load_all_bots() -> list:
                 config['image'] = ''
             bots.append(config)
         except Exception as e:
-            print(f"[Storage] خطا في تحميل {config_path}: {e}")
-
+            print(f"[Storage] error {config_path}: {e}")
     return bots
 
 
 def bot_exists(bot_name: str) -> bool:
-    bot_dir = get_bot_dir(bot_name)
-    return os.path.isfile(os.path.join(bot_dir, 'bot_files', 'config.json'))
+    return os.path.isfile(
+        os.path.join(get_bot_dir(bot_name), 'bot_files', 'config.json')
+    )
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -198,540 +130,397 @@ THEME = {
 }
 
 
-def _c(key: str):
-    return get_color_from_hex(THEME[key])
+def _c(key: str) -> str:
+    return THEME[key]
 
 
-def _font() -> str:
-    return REGISTERED_FONT or Label.font_name.defaultvalue or 'font'
+# ══════════════════════════════════════════════════════════════════════════════
+#  WARNING DIALOG
+# ══════════════════════════════════════════════════════════════════════════════
 
+def _show_warning(page: ft.Page, message: str):
+    def _close(_):
+        page.pop_dialog()
 
-def _draw_card(w, radius=12):
-    with w.canvas.before:
-        Color(*_c('card_bg'))
-        rect   = RoundedRectangle(pos=w.pos, size=w.size, radius=[dp(radius)])
-        Color(*_c('card_border'))
-        border = Line(
-            rounded_rectangle=(w.x, w.y, w.width, w.height, dp(radius)),
-            width=1.1,
-        )
-    w.bind(
-        pos =lambda i, v: (
-            setattr(rect,   'pos', v),
-            setattr(border, 'rounded_rectangle',
-                    (v[0], v[1], i.width, i.height, dp(radius))),
+    dlg = ft.AlertDialog(
+        modal=True,
+        title=ft.Text(
+            '!',
+            color=_c('danger'),
+            size=28,
+            weight=ft.FontWeight.BOLD,
+            text_align=ft.TextAlign.CENTER,
         ),
-        size=lambda i, v: (
-            setattr(rect,   'size', v),
-            setattr(border, 'rounded_rectangle',
-                    (i.x, i.y, v[0], v[1], dp(radius))),
+        content=ft.Text(
+            message,
+            color=_c('text'),
+            text_align=ft.TextAlign.CENTER,
+        ),
+        actions=[
+            ft.TextButton(
+                content=ft.Text(_t('ok'), color=_c('danger')),
+                on_click=_close,
+            ),
+        ],
+        actions_alignment=ft.MainAxisAlignment.CENTER,
+        bgcolor=_c('popup_bg'),
+        shape=ft.RoundedRectangleBorder(radius=16),
+    )
+    page.show_dialog(dlg)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  BOT CARD
+# ══════════════════════════════════════════════════════════════════════════════
+
+def build_bot_card(
+    bot_data: dict,
+    on_open_dashboard,
+) -> ft.Container:
+
+    img_path = bot_data.get('image', '')
+    if img_path and os.path.isfile(img_path):
+        avatar = ft.Image(
+            src=img_path,
+            width=42, height=42,
+            fit=ft.BoxFit.COVER,
+            border_radius=21,
+        )
+    else:
+        avatar = ft.Container(
+            content=ft.Text(_t('avatar_none'), size=11, color=_c('text_dim')),
+            width=42, height=42,
+            border_radius=21,
+            bgcolor=_c('icon_bg'),
+            alignment=ft.Alignment(0, 0),
+        )
+
+    name_lbl = ft.Text(
+        bot_data.get('name', 'Bot'),
+        size=14,
+        weight=ft.FontWeight.BOLD,
+        color=_c('text'),
+    )
+
+    go_btn = ft.IconButton(
+        icon=ft.Icons.ARROW_FORWARD_ROUNDED,
+        icon_color=_c('text_on_accent'),
+        bgcolor=_c('accent'),
+        icon_size=18,
+        on_click=lambda _: on_open_dashboard(bot_data),
+        tooltip='Open Dashboard',
+        style=ft.ButtonStyle(shape=ft.CircleBorder()),
+    )
+
+    return ft.Container(
+        content=ft.Row(
+            [avatar, ft.Column([name_lbl], expand=True), go_btn],
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            spacing=12,
+        ),
+        padding=ft.Padding(left=14, top=10, right=14, bottom=10),
+        height=70,
+        bgcolor=_c('card_bg'),
+        border_radius=12,
+        border=ft.Border(
+            left=ft.BorderSide(1, _c('card_border')),
+            top=ft.BorderSide(1, _c('card_border')),
+            right=ft.BorderSide(1, _c('card_border')),
+            bottom=ft.BorderSide(1, _c('card_border')),
         ),
     )
 
 
-def _draw_input(inp):
-    with inp.canvas.before:
-        Color(*_c('input_bg'))
-        inp._bg = RoundedRectangle(pos=inp.pos, size=inp.size, radius=[dp(10)])
-        Color(*_c('input_border'))
-        inp._bd = Line(
-            rounded_rectangle=(inp.x, inp.y, inp.width, inp.height, dp(10)),
-            width=1.1,
-        )
-    inp.bind(
-        pos =lambda i, v: (
-            setattr(i._bg, 'pos', v),
-            setattr(i._bd, 'rounded_rectangle',
-                    (v[0], v[1], i.width, i.height, dp(10))),
-        ),
-        size=lambda i, v: (
-            setattr(i._bg, 'size', v),
-            setattr(i._bd, 'rounded_rectangle',
-                    (i.x, i.y, v[0], v[1], dp(10))),
-        ),
-    )
-
-
 # ══════════════════════════════════════════════════════════════════════════════
-#  BotCard
+#  CREATE BOT DIALOG
 # ══════════════════════════════════════════════════════════════════════════════
 
-class BotCard(BoxLayout):
+class CreateBotDialog:
 
-    def __init__(self, bot_data: dict, on_start, on_stop, on_delete,
-                 manager=None, **kwargs):
-        super().__init__(**kwargs)
-        self.orientation     = 'horizontal'
-        self.size_hint_y     = None
-        self.height          = dp(70)
-        self.padding         = [dp(14), dp(10), dp(14), dp(10)]
-        self.spacing         = dp(12)
-        self.bot_data        = bot_data
-        self._running        = False
-        self._on_start       = on_start
-        self._on_stop        = on_stop
-        self._screen_manager = manager
-        _draw_card(self, radius=12)
+    def __init__(self, page: ft.Page, on_create: callable):
+        self._page      = page
+        self._on_create = on_create
+        self._img_path  = ''
 
-        img_path = bot_data.get('image', '')
-        if img_path and os.path.isfile(img_path):
-            icon = Image(
-                source=img_path,
-                size_hint=(None, None),
-                size=(dp(42), dp(42)),
-                fit_mode='cover',
-            )
-        else:
-            icon = Label(
-                text=_t('avatar_none'),
-                font_size=dp(11),
-                font_name=_font(),
-                color=_c('text_dim'),
-                size_hint=(None, 1), width=dp(42),
-            )
-        self.add_widget(icon)
-
-        info = BoxLayout(orientation='vertical', spacing=dp(2))
-        self._name_lbl = Label(
-            text=bot_data.get('name', 'Bot'),
-            font_size=dp(14), bold=True,
-            color=_c('text'),
-            font_name=_font(),
-            halign='left', valign='middle',
+        self._avatar_stack = ft.Stack(
+            [
+                ft.Container(
+                    content=ft.Text(
+                        _t('image_label'),
+                        size=12,
+                        color=_c('text'),
+                        text_align=ft.TextAlign.CENTER,
+                    ),
+                    width=80, height=80,
+                    bgcolor=_c('icon_bg'),
+                    border_radius=40,
+                    alignment=ft.Alignment(0, 0),
+                )
+            ],
+            width=80, height=80,
         )
-        self._name_lbl.bind(size=lambda i, v: setattr(i, 'text_size', v))
-        info.add_widget(self._name_lbl)
-        self.add_widget(info)
-
-        btns = BoxLayout(orientation='horizontal',
-                         size_hint=(None, 1), width=dp(96), spacing=dp(6))
-
-        self._play_btn = Button(
-            text='->',
-            font_size=dp(16),
-            font_name=_font(),
-            background_normal='',
-            background_color=_c('accent'),
-            color=(1, 1, 1, 1),
-            size_hint=(None, None), size=(dp(40), dp(40)),
-        )
-        self._play_btn.bind(on_press=self._go_to_external_main)
-        btns.add_widget(self._play_btn)
-        self.add_widget(btns)
-
-    def _go_to_external_main(self, _):
-        if not self._screen_manager:
-            return
-        if not self._screen_manager.has_screen('bot_dashboard'):
-            return
-
-        bot_name  = self.bot_data.get('name', 'bot')
-        safe_name = "".join(
-            c for c in bot_name if c.isalnum() or c in (' ', '-', '_')
-        ).strip().replace(' ', '_') or 'bot'
-
-        bot_dir = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)),
-        'app_data', safe_name, 
-        )
-
-        dashboard = self._screen_manager.get_screen('bot_dashboard')
-        dashboard.load_bot(bot_dir)
-        self._screen_manager.current = 'bot_dashboard'
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  CreateBotPopup
-# ══════════════════════════════════════════════════════════════════════════════
-
-class CreateBotPopup(Popup):
-
-    def __init__(self, on_create: callable, **kwargs):
-        super().__init__(**kwargs)
-        self.on_create_cb     = on_create
-        self._image_path      = ''
-        self.title            = ''
-        self.separator_height = 0
-        self.size_hint        = (0.86, None)
-        self.height           = dp(460)
-        self.background       = ''
-        self.background_color = (0, 0, 0, 0)
-
-        root = BoxLayout(
-            orientation='vertical',
-            padding=[dp(24), dp(24), dp(24), dp(24)],
-            spacing=dp(12),
-        )
-        with root.canvas.before:
-            Color(*_c('popup_bg'))
-            root._bg = RoundedRectangle(pos=root.pos, size=root.size, radius=[dp(18)])
-            Color(*_c('card_border'))
-            root._bd = Line(
-                rounded_rectangle=(root.x, root.y, root.width, root.height, dp(18)),
-                width=1.2,
-            )
-        root.bind(
-            pos =lambda i, v: (
-                setattr(i._bg, 'pos', v),
-                setattr(i._bd, 'rounded_rectangle',
-                        (v[0], v[1], i.width, i.height, dp(18))),
+        self._pick_btn = ft.TextButton(
+            content=ft.Row(
+                [ft.Icon(ft.Icons.ADD_PHOTO_ALTERNATE_OUTLINED, color=_c('accent')),
+                 ft.Text(_t('image_label'), color=_c('accent'))],
+                spacing=4, tight=True,
             ),
-            size=lambda i, v: (
-                setattr(i._bg, 'size', v),
-                setattr(i._bd, 'rounded_rectangle',
-                        (i.x, i.y, v[0], v[1], dp(18))),
+            on_click=self._pick_image,
+        )
+
+        self._name_field = ft.TextField(
+            label=_t('name_label') or 'Bot Name',
+            hint_text=_t('name_hint') or 'My Awesome Bot',
+            border_color=_c('input_border'),
+            focused_border_color=_c('accent'),
+            cursor_color=_c('accent'),
+            bgcolor='#F5F5F5',
+            border_radius=10,
+            label_style=ft.TextStyle(color=_c('text'), size=13),
+            text_style=ft.TextStyle(color=_c('text'), size=13),
+        )
+        self._token_field = ft.TextField(
+            label=_t('token_label') or 'Bot Token',
+            hint_text=_t('token_hint') or 'Paste your Discord token here',
+            password=True,
+            can_reveal_password=True,
+            border_color=_c('input_border'),
+            focused_border_color=_c('accent'),
+            cursor_color=_c('accent'),
+            bgcolor='#F5F5F5',
+            border_radius=10,
+            label_style=ft.TextStyle(color=_c('text'), size=13),
+            text_style=ft.TextStyle(color=_c('text'), size=13),
+        )
+
+        self._file_picker = ft.FilePicker()
+
+        self._dlg = ft.AlertDialog(
+            modal=True,
+            bgcolor=_c('popup_bg'),
+            shape=ft.RoundedRectangleBorder(radius=18),
+            title=ft.Text(
+                _t('new_bot'),
+                weight=ft.FontWeight.BOLD,
+                color=_c('text'),
             ),
+            content=ft.Column(
+                [
+                    ft.Row(
+                        [self._avatar_stack, self._pick_btn],
+                        alignment=ft.MainAxisAlignment.CENTER,
+                        spacing=16,
+                    ),
+                    self._name_field,
+                    self._token_field,
+                ],
+                tight=True,
+                spacing=14,
+                width=300,
+            ),
+            actions=[
+                ft.TextButton(
+                    content=ft.Text('Cancel', color=_c('text_dim')),
+                    on_click=self._cancel,
+                ),
+                ft.FilledButton(
+                    content=ft.Text(_t('make') or 'Create', color='#FFFFFF', weight=ft.FontWeight.W_600),
+                    on_click=self._submit,
+                    style=ft.ButtonStyle(
+                        bgcolor=_c('accent'),
+                        color='#FFFFFF',
+                        shape=ft.RoundedRectangleBorder(radius=12),
+                        padding=ft.Padding(left=20, top=10, right=20, bottom=10),
+                    ),
+                ),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
         )
 
-        # ── صورة البوت ───────────────────────────────────────────────
-        img_wrap = BoxLayout(size_hint=(1, None), height=dp(86))
-        img_wrap.add_widget(Label(size_hint_x=1))
+    def open(self):
+        self._page.show_dialog(self._dlg)
 
-        self._img_btn = Button(
-            size_hint=(None, None), size=(dp(80), dp(80)),
-            background_normal='', background_color=(0, 0, 0, 0),
+    async def _pick_image(self, _):
+        files = await self._file_picker.pick_files(
+            dialog_title='Choose Bot Image',
+            file_type=ft.FilePickerFileType.CUSTOM,
+            allowed_extensions=['png', 'jpg', 'jpeg', 'gif', 'webp'],
         )
-        self._img_btn.bind(on_press=self._pick_image)
-
-        with self._img_btn.canvas.before:
-            Color(*_c('icon_bg'))
-            self._img_circle = Ellipse(pos=self._img_btn.pos, size=self._img_btn.size)
-        self._img_btn.bind(
-            pos =lambda i, v: setattr(self._img_circle, 'pos', v),
-            size=lambda i, v: setattr(self._img_circle, 'size', v),
-        )
-
-        self._img_lbl = Label(
-            text=_t('image_label'),
-            font_size=dp(13),
-            font_name=_font(),
-            color=_c('text'),
-            halign='center', valign='middle', size_hint=(1, 1),
-        )
-        self._img_lbl.bind(size=lambda i, v: setattr(i, 'text_size', v))
-        self._img_btn.add_widget(self._img_lbl)
-        self._img_widget = None
-
-        img_wrap.add_widget(self._img_btn)
-        img_wrap.add_widget(Label(size_hint_x=1))
-        root.add_widget(img_wrap)
-
-        root.add_widget(self._dim(_t('name_label')))
-        self._name = self._field(_t('name_hint'), root)
-
-        root.add_widget(self._dim(_t('token_label')))
-        self._token = self._field(_t('token_hint'), root, password=True)
-
-        make = Button(
-            text=_t('make'),
-            size_hint=(1, None), height=dp(46),
-            background_normal='', background_color=_c('accent'),
-            color=(1, 1, 1, 1), font_size=dp(15), bold=True,
-            font_name=_font(),
-        )
-        make.bind(on_press=self._submit)
-        root.add_widget(make)
-
-        self.content = root
-
-    def _pick_image(self, _):
-        filechooser.open_file(
-            title='Choose Bot Image',
-            filters=[('Images', '*.png', '*.jpg', '*.jpeg', '*.gif', '*.webp')],
-            on_selection=self._set_image,
-        )
-
-    def _set_image(self, selection):
-        if not selection:
+        if not files:
             return
-        path = selection[0]
-        if not os.path.isfile(path):
+        path = files[0].path
+        if not path or not os.path.isfile(path):
             return
-        self._image_path = path
-        self._img_btn.clear_widgets()
-        img = Image(
-            source=path,
-            size_hint=(None, None), size=(dp(80), dp(80)),
-            fit_mode='contain',
-            pos=(self._img_btn.x, self._img_btn.y),
-        )
-        with img.canvas.before:
-            Color(1, 1, 1, 1)
-            self._mask = Ellipse(pos=img.pos, size=img.size)
-        img.bind(
-            pos =lambda i, v: setattr(self._mask,   'pos',  v),
-            size=lambda i, v: setattr(self._mask,   'size', v),
-        )
-        with img.canvas.after:
-            Color(0, 0, 0, 1)
-            self._border = Line(
-                rounded_rectangle=(img.x, img.y, img.width, img.height, dp(40)),
-                width=2,
+
+        self._img_path = path
+        self._avatar_stack.controls.clear()
+        self._avatar_stack.controls.append(
+            ft.Container(
+                content=ft.Image(
+                    src=path,
+                    width=80, height=80,
+                    fit=ft.BoxFit.COVER,
+                    border_radius=40,
+                ),
+                width=80, height=80,
+                border_radius=40,
+                clip_behavior=ft.ClipBehavior.HARD_EDGE,
             )
-        img.bind(
-            pos =lambda i, v: setattr(self._border, 'rounded_rectangle',
-                                      (v[0], v[1], i.width, i.height, dp(40))),
-            size=lambda i, v: setattr(self._border, 'rounded_rectangle',
-                                      (i.x, i.y, v[0], v[1], dp(40))),
         )
-        self._img_btn.add_widget(img)
-        self._img_widget = img
-
-    def _dim(self, text: str) -> Label:
-        lbl = Label(
-            text=text, font_size=dp(11), bold=True,
-            color=_c('text_dim'),
-            font_name=_font(),
-            size_hint=(1, None), height=dp(15), halign='left',
-        )
-        lbl.bind(size=lambda i, v: setattr(i, 'text_size', v))
-        return lbl
-
-    def _field(self, hint: str, parent, password=False) -> TextInput:
-        inp = TextInput(
-            hint_text=hint,
-            hint_text_color=(0, 0, 0, 0.4),
-            foreground_color=(0, 0, 0, 1),
-            background_color=(1, 1, 1, 1),
-            cursor_color=(0, 0, 0, 1),
-            font_size=dp(14),
-            font_name=_font(),
-            multiline=False, password=password,
-            size_hint=(1, None), height=dp(46),
-            padding=[dp(10), dp(5), dp(5), dp(10)],
-            halign='left',
-        )
-        parent.add_widget(inp)
-        return inp
+        self._page.update()
 
     def _submit(self, _):
-        name  = self._name.text.strip() or 'My Bot'
-        token = self._token.text.strip()
+        name  = self._name_field.value.strip() or 'My Bot'
+        token = self._token_field.value.strip()
         if not token:
-            self._token.hint_text = _t('token_required')
+            self._token_field.error_text = _t('token_required')
+            self._page.update()
             return
-        self.dismiss()
-        self.on_create_cb({'name': name, 'token': token, 'image': self._image_path})
+        self._page.pop_dialog()
+        self._on_create({'name': name, 'token': token, 'image': self._img_path})
+
+    def _cancel(self, _):
+        self._page.pop_dialog()
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  Warning Popup 
-# ══════════════════════════════════════════════════════════════════════════════
 
-def _show_warning(message: str):
-    content = BoxLayout(
-        orientation='vertical',
-        padding=[dp(20), dp(20), dp(20), dp(20)],
-        spacing=dp(14),
-    )
+class MainView:
 
-    with content.canvas.before:
-        Color(*get_color_from_hex(THEME['popup_bg']))
-        content._bg = RoundedRectangle(pos=content.pos, size=content.size, radius=[dp(16)])
-        Color(*get_color_from_hex(THEME['danger']))
-        content._bd = Line(
-            rounded_rectangle=(content.x, content.y, content.width, content.height, dp(16)),
-            width=1.4,
-        )
-    content.bind(
-        pos =lambda i, v: (
-            setattr(i._bg, 'pos', v),
-            setattr(i._bd, 'rounded_rectangle',
-                    (v[0], v[1], i.width, i.height, dp(16))),
-        ),
-        size=lambda i, v: (
-            setattr(i._bg, 'size', v),
-            setattr(i._bd, 'rounded_rectangle',
-                    (i.x, i.y, v[0], v[1], dp(16))),
-        ),
-    )
+    def __init__(self, page: ft.Page, on_open_dashboard: callable):
+        self._page              = page
+        self._on_open_dashboard = on_open_dashboard
 
-    icon = Label(
-        text='!',
-        font_size=dp(34), bold=True,
-        font_name=_font(),
-        size_hint=(1, None), height=dp(44),
-        halign='center',
-        color=get_color_from_hex(THEME['danger']),
-    )
-    icon.bind(size=lambda i, v: setattr(i, 'text_size', v))
+        self._cards_col = ft.Column(spacing=10, scroll=ft.ScrollMode.AUTO, expand=True)
 
-    msg = Label(
-        text=message,
-        font_size=dp(13),
-        color=get_color_from_hex(THEME['text']),
-        font_name=_font(),
-        halign='center', valign='middle',
-        size_hint=(1, None), height=dp(50),
-    )
-    msg.bind(size=lambda i, v: setattr(i, 'text_size', v))
-
-    close_btn = Button(
-        text=_t('ok'),
-        size_hint=(1, None), height=dp(42),
-        background_normal='', background_color=get_color_from_hex(THEME['danger']),
-        color=(1, 1, 1, 1), font_size=dp(14), bold=True,
-        font_name=_font(),
-    )
-
-    content.add_widget(icon)
-    content.add_widget(msg)
-    content.add_widget(close_btn)
-
-    popup = Popup(
-        title='', separator_height=0,
-        size_hint=(0.78, None), height=dp(220),
-        background='', background_color=(0, 0, 0, 0),
-        content=content,
-    )
-    close_btn.bind(on_press=popup.dismiss)
-    popup.open()
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  MainScreen
-# ══════════════════════════════════════════════════════════════════════════════
-
-class MainScreen(Screen):
-
-    def __init__(self, app_instance, manager=None, **kwargs):
-        super().__init__(**kwargs)
-        self.app_instance    = app_instance
-        self._screen_manager = manager
-        self.name            = 'main'
-        self._build()
-
-    def on_enter(self, *args):
-        pass
-
-    def _build(self):
-        Window.clearcolor = _c('bg')
-        root = FloatLayout()
-
-        # ── Header ───────────────────────────────────────────────────
-        header = BoxLayout(
-            orientation='horizontal', size_hint=(1, None),
-            height=dp(52), pos_hint={'top': 1},
-            padding=[dp(18), dp(10), dp(18), dp(10)],
-        )
-        title_box = BoxLayout(orientation='horizontal',
-                              size_hint=(None, 1), width=dp(130))
-        lbl_bcfd = Label(
-            text='[b]' + _t('main_title') + '[/b]', markup=True,
-            font_size=dp(22), color=_c('title_bcfd'),
-            font_name=_font(),
-            size_hint=(None, 1), width=dp(80),
-            halign='left', valign='middle',
-        )
-        lbl_bcfd.bind(size=lambda i, v: setattr(i, 'text_size', v))
-        title_box.add_widget(lbl_bcfd)
-        header.add_widget(title_box)
-        header.add_widget(Label(size_hint_x=1))
-        root.add_widget(header)
-
-        # ── list bot's ─────────────────────────────────────────────
-        scroll = ScrollView(size_hint=(1, 1), pos_hint={'x': 0, 'y': 0},
-                            do_scroll_x=False)
-        self._grid = GridLayout(
-            cols=1, spacing=dp(10), size_hint_y=None,
-            padding=[dp(16), dp(60), dp(16), dp(74)],
-        )
-        self._grid.bind(minimum_height=self._grid.setter('height'))
-        scroll.add_widget(self._grid)
-        root.add_widget(scroll)
-
-        self._empty = Label(
-            text=_t('no_bots_hint'),
-            font_size=dp(14), color=_c('text_dim'),
-            font_name=_font(),
-            halign='center',
-            size_hint=(None, None), size=(dp(300), dp(40)),
-            pos_hint={'center_x': 0.5, 'center_y': 0.52},
-        )
-        self._empty.bind(size=lambda i, v: setattr(i, 'text_size', v))
-        root.add_widget(self._empty)
-
-        # ── Footer ───────────────────────────────────────────────────
-        footer = BoxLayout(
-            orientation='horizontal', size_hint=(1, None),
-            height=dp(62), pos_hint={'x': 0, 'y': 0},
-            padding=[dp(14), dp(11), dp(14), dp(11)], spacing=dp(8),
-        )
-        with footer.canvas.before:
-            Color(*_c('footer_bg'))
-            fb = RoundedRectangle(pos=footer.pos, size=footer.size, radius=[dp(0)])
-            Color(*_c('card_border'))
-            fl = Line(points=[], width=1)
-        footer.bind(
-            pos =lambda i, v: (
-                setattr(fb, 'pos', v),
-                setattr(fl, 'points',
-                        [v[0], v[1] + i.height, v[0] + i.width, v[1] + i.height]),
+        self._empty_label = ft.Container(
+            content=ft.Text(
+                _t('no_bots_hint'),
+                size=14,
+                color=_c('text_dim'),
+                text_align=ft.TextAlign.CENTER,
             ),
-            size=lambda i, v: (
-                setattr(fb, 'size', v),
-                setattr(fl, 'points',
-                        [i.x, i.y + v[1], i.x + v[0], i.y + v[1]]),
-            ),
+            alignment=ft.Alignment(0, 0),
+            expand=True,
         )
-
-        for key, color_key, url in [
-            ('discord', 'discord', 'https://discord.gg/JngaJRC6Y9'),
-            ('github',  'github',  'https://github.com/Aksjuwu/BCFD-L'),
-        ]:
-            b = Button(
-                text=_t(key),
-                size_hint=(None, None), size=(dp(76), dp(38)),
-                background_normal='', background_color=_c(color_key),
-                color=(1, 1, 1, 1), font_size=dp(12),
-                font_name=_font(),
-            )
-            b.bind(on_press=lambda x, u=url: webbrowser.open(u))
-            footer.add_widget(b)
-
-        footer.add_widget(Label(size_hint_x=1))
-
-        add_btn = Button(
-            text=_t('new_bot'),
-            size_hint=(None, None), size=(dp(96), dp(38)),
-            background_normal='', background_color=_c('accent'),
-            color=(1, 1, 1, 1), font_size=dp(13), bold=True,
-            font_name=_font(),
-        )
-        add_btn.bind(on_press=lambda x: CreateBotPopup(on_create=self._add_bot).open())
-        footer.add_widget(add_btn)
-
-        root.add_widget(footer)
-        self.add_widget(root)
 
         self._load_saved_bots()
 
+    # ── public ───────────────────────────────────────────────────────
+
+    def build(self) -> ft.Control:
+        header = ft.Container(
+            content=ft.Row(
+                [
+                    ft.Text(
+                        _t('main_title'),
+                        size=22,
+                        weight=ft.FontWeight.BOLD,
+                        color=_c('title_bcfd'),
+                    ),
+                ],
+            ),
+            padding=ft.Padding(left=18, top=10, right=18, bottom=10),
+        )
+
+        self._content_area = ft.Container(
+            content=self._cards_col if self._cards_col.controls else self._empty_label,
+            expand=True,
+            padding=ft.Padding(left=16, top=8, right=16, bottom=8),
+        )
+
+        footer = ft.Container(
+            content=ft.Row(
+                [
+                    ft.FilledButton(
+                        content=ft.Row(
+                            [ft.Icon(ft.Icons.TAG, color='#FFFFFF', size=16),
+                             ft.Text(_t('discord'), color='#FFFFFF', size=13)],
+                            spacing=5, tight=True,
+                        ),
+                        style=ft.ButtonStyle(
+                            bgcolor=_c('discord'),
+                            color='#FFFFFF',
+                            shape=ft.RoundedRectangleBorder(radius=20),
+                            padding=ft.Padding(left=12, top=8, right=12, bottom=8),
+                        ),
+                        on_click=lambda _: webbrowser.open('https://discord.gg/JngaJRC6Y9'),
+                    ),
+                    ft.FilledButton(
+                        content=ft.Row(
+                            [ft.Icon(ft.Icons.CODE, color='#FFFFFF', size=16),
+                             ft.Text(_t('github'), color='#FFFFFF', size=13)],
+                            spacing=5, tight=True,
+                        ),
+                        style=ft.ButtonStyle(
+                            bgcolor=_c('github'),
+                            color='#FFFFFF',
+                            shape=ft.RoundedRectangleBorder(radius=20),
+                            padding=ft.Padding(left=12, top=8, right=12, bottom=8),
+                        ),
+                        on_click=lambda _: webbrowser.open('https://github.com/Aksjuwu/BCFD-L'),
+                    ),
+                    ft.Container(expand=True),
+                    ft.FilledButton(
+                        content=ft.Row(
+                            [ft.Icon(ft.Icons.ADD, color='#FFFFFF', size=16),
+                             ft.Text(_t('new_bot'), color='#FFFFFF', size=13)],
+                            spacing=5, tight=True,
+                        ),
+                        style=ft.ButtonStyle(
+                            bgcolor=_c('accent'),
+                            color='#FFFFFF',
+                            shape=ft.RoundedRectangleBorder(radius=20),
+                            padding=ft.Padding(left=12, top=8, right=12, bottom=8),
+                        ),
+                        on_click=self._open_create_dialog,
+                    ),
+                ],
+                spacing=8,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+            bgcolor=_c('footer_bg'),
+            padding=ft.Padding(left=14, top=11, right=14, bottom=11),
+            height=62,
+        )
+
+        return ft.Column(
+            [header, self._content_area, footer],
+            spacing=0,
+            expand=True,
+        )
+
+    # ── private ──────────────────────────────────────────────────────
+
+    def _open_create_dialog(self, _):
+        CreateBotDialog(self._page, on_create=self._add_bot).open()
+
     def _load_saved_bots(self):
         for bot_data in load_all_bots():
-            self._add_bot_card(bot_data)
+            self._push_card(bot_data)
 
     def _add_bot(self, data: dict):
         name = data.get('name', 'My Bot')
         if bot_exists(name):
-            _show_warning(_t('name_taken'))
+            _show_warning(self._page, _t('name_taken'))
             return
-        saved_data = save_bot_data(data)
-        self._add_bot_card(saved_data)
+        self._push_card(save_bot_data(data))
+        self._refresh_content_area()
+        self._page.update()
 
-    def _add_bot_card(self, bot_data: dict):
-        self._empty.opacity = 0
-        self._grid.add_widget(BotCard(
+    def _push_card(self, bot_data: dict):
+        card = build_bot_card(
             bot_data=bot_data,
-            on_start=self._start_bot,
-            on_stop=self._stop_bot,
-            on_delete=self._remove_bot,
-            manager=self._screen_manager,
-        ))
+            on_open_dashboard=self._on_open_dashboard,
+        )
+        self._cards_col.controls.append(card)
 
-    def _remove_bot(self, card):
-        self._grid.remove_widget(card)
-        if not self._grid.children:
-            self._empty.opacity = 1
+    def _refresh_content_area(self):
+        if not hasattr(self, '_content_area'):
+            return
+        if self._cards_col.controls:
+            self._content_area.content = self._cards_col
+        else:
+            self._content_area.content = self._empty_label
 
     def _start_bot(self, data):
         try:
@@ -747,26 +536,80 @@ class MainScreen(Screen):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  App
+#  NAVIGATION HELPERS
 # ══════════════════════════════════════════════════════════════════════════════
 
-class BCFDApp(App):
+def _show_main(page: ft.Page):
+    page.clean()
 
-    def build(self):
-        # تعيين أيقونة النافذة باستخدام المسار المُعرف مسبقاً
-        self.icon = icon_path 
-        
-        saved_theme = get_current_theme()
-        apply_theme_globally(saved_theme)
-        Window.clearcolor = _c('bg')
+    def open_dashboard(bot_data: dict):
+        _show_dashboard(page, bot_data)
 
-        sm = ScreenManager()
+    view = MainView(page=page, on_open_dashboard=open_dashboard)
+    page.add(view.build())
+    page.update()
 
-        main_scr = MainScreen(self, manager=sm)
-        sm.add_widget(main_scr)
 
-        from main_exe.main import BotDashboardScreen
-        dashboard = BotDashboardScreen(main_screen_manager=sm)
-        sm.add_widget(dashboard)
+def _show_dashboard(page: ft.Page, bot_data: dict):
 
-        return sm
+    bot_name  = bot_data.get('name', 'bot')
+    safe_name = "".join(
+        c for c in bot_name if c.isalnum() or c in (' ', '-', '_')
+    ).strip().replace(' ', '_') or 'bot'
+
+    bot_dir = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        'app_data', safe_name,
+    )
+
+    page.clean()
+
+    dashboard = BotDashboardScreen(page=page, bot_dir=bot_dir, on_back=lambda: _show_main(page))
+    page.add(dashboard.build())
+    page.update()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  ENTRY POINT
+# ══════════════════════════════════════════════════════════════════════════════
+
+def main(page: ft.Page):
+    page.title          = 'BCFD'
+    page.window.icon    = icon_path
+    page.window.width   = 420
+    page.window.height  = 720
+    page.padding        = 0
+
+    fonts_dir = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        'main_exe', 'langs', 'fonts'
+    )
+    fonts = {}
+    if os.path.isdir(fonts_dir):
+        for file in os.listdir(fonts_dir):
+            if file.lower().endswith('.ttf'):
+                name = os.path.splitext(file)[0]
+                fonts[name] = os.path.join(fonts_dir, file)
+
+    page.fonts = fonts if fonts else {
+        "Cairo": "https://github.com/google/fonts/raw/main/ofl/cairo/Cairo-Regular.ttf"
+    }
+    default_font = next(iter(page.fonts), "Cairo")
+    page.theme = ft.Theme(font_family=default_font)
+
+    saved_theme = get_current_theme()
+    apply_theme_globally(saved_theme)
+
+    def _sync_page_bg(data: dict):
+        page.bgcolor = data.get('bg', '#FFFFFF')
+        page.update()
+
+    page._bg_sync = _sync_page_bg         
+    ThemeEngine.subscribe(page._bg_sync)
+    page.bgcolor = ThemeEngine.hex('bg')
+
+
+    _show_main(page)
+
+if __name__ == '__main__':
+    ft.run(main) 

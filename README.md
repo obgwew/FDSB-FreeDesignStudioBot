@@ -12,9 +12,9 @@
 
 **Notes:**
 
-- Some thims require a restart to take effect.
+- Some themes require a restart to take effect.
 - The built-in command set is intentionally minimal – FDScript handles the heavy lifting.
-- While FDSrcipt gen 2 offers greater command-line processing capabilities, it's important to note that some poorly planned complexities may produce undesirable results (please report any such issues).
+- While FDScript gen 2 offers greater command-line processing capabilities, it's important to note that some poorly planned complexities may produce undesirable results (please report any such issues).
 
 ---
 
@@ -33,23 +33,51 @@
 
 - **2.0.0** — Feature update
   - Improved UI
-  - new FDScript Gen 1
+  - New FDScript Gen 1
   - Fixed bot file conflicts
   - Added settings panel
   - Added theme support
 
 - **2.0.1** — FDScript Growth & Some Fixes
-  - add a new 20+ command's to FDScript 
-  - fixed some Themes 
-  - fixed button research of command_view 
-  - fixed input's in settings_view 
-  - replace icon kivy to BCFD
+  - Added 20+ new commands to FDScript
+  - Fixed some themes
+  - Fixed button behavior in commands_view
+  - Fixed inputs in settings_view
+  - Replaced Kivy icon with BCFD icon
 
 - **2.1.0** — Task integration & event commands
-  - add a new commands of admin's (Basic Discord commands)
-  - add a new event command
-  - upload/download data bot for any someone
+  - Added new admin commands (Basic Discord commands)
+  - Added new event commands
+  - Upload/download bot data
   - FDScript gen 2 development
-  - fixed some commands
+  - Fixed some commands
 
-**Developers:** @y.lw (contributor) · @o_bg (programming)
+- **2.2.0** - Upgrade UI By Flet
+  - Convert from kivy to flet
+  - Ui updated 
+  - Ui effects
+  - Fixed some ui
+  - Fixed some commands
+
+---
+
+**Developers:** @y.lw (contributor) · [@obgwew](https://github.com/obgwew) (programming)
+
+---
+
+## License
+
+Copyright (C) 2026 obgwew
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the **GNU Affero General Public License** as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
