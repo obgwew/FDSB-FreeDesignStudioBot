@@ -271,7 +271,7 @@ $reply
 $sendMessage[Here is your answer, $mention!]
 ```
 
-> When the event type is `$alwaysReply`, replies are automatic — no need for `$reply`.
+> You can put `$reply` Anywhere in the editor, it will reply automatically regardless of its location.
 
 ---
 
