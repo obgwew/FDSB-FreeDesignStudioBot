@@ -61,6 +61,8 @@
 - [`$while` / `$endwhile`](#while--endwhile)
 - [`$for` / `$endfor`](#for--endfor)
 - [`$break`](#break)
+- [`$wait`](#wait)
+- [`$replyIn`](#replyin)
 
 ### Bot Info
 - [`$ping`](#ping)
@@ -271,7 +273,7 @@ $reply
 $sendMessage[Here is your answer, $mention!]
 ```
 
-> You can put `$reply` Anywhere in the editor, it will reply automatically regardless of its location.
+> You can put `$reply` Anywhere in the message and it will work automatically regardless of its location.
 
 ---
 
@@ -1096,7 +1098,7 @@ $sendMessage[Add the bot: $getBotInvent]
 ### Audit log snapshot
 ```
 $sendMessage[Command executed.]
-$log[987654321098765432; command-audit]
+$log[112233445566778899; command-audit]
 ```
 
 ---
