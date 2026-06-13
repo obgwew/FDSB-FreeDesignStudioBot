@@ -273,7 +273,7 @@ $reply
 $sendMessage[Here is your answer, $mention!]
 ```
 
-> You can put `$reply` Anywhere in the message and it will work automatically regardless of its location.
+> When the event type is `$alwaysReply`, replies are automatic — no need for `$reply`.
 
 ---
 
@@ -766,6 +766,54 @@ Stopped at 4
 
 ---
 
+## `$wait`
+
+Pauses script execution for a specified duration, then resumes from where it stopped.
+
+```
+$wait[duration]
+```
+
+Duration format: integer + unit (`s` `m` `h` `d`)
+
+| Unit | Meaning |
+|------|---------|
+| `s` | Seconds |
+| `m` | Minutes |
+| `h` | Hours |
+| `d` | Days |
+
+**Example:**
+```
+$sendMessage[Starting process...]
+$wait[5s]
+$sendMessage[Done! 5 seconds later.]
+```
+
+> Unlike `$replyIn`, this **halts the entire script** for the specified time. Use it when the order of operations matters.
+
+---
+
+## `$replyIn`
+
+Delays only the bot's reply message — the rest of the script continues executing normally in the background.
+
+```
+$replyIn[duration]
+```
+
+Duration format: integer + unit (`s` `m` `h` `d`) — same units as `$wait`.
+
+**Example:**
+```
+$replyIn[10s]
+$sendMessage[This message will appear 10 seconds later.]
+```
+
+> **Note:** Maximum delay is 40 light-years. We recommend staying under that. 
+
+---
+
 ## `$ping`
 
 Sends the bot's current WebSocket latency in milliseconds.
@@ -1098,7 +1146,7 @@ $sendMessage[Add the bot: $getBotInvent]
 ### Audit log snapshot
 ```
 $sendMessage[Command executed.]
-$log[112233445566778899; command-audit]
+$log[987654321098765432; command-audit]
 ```
 
 ---
