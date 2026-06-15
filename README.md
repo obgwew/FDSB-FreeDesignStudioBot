@@ -13,7 +13,7 @@
 **Notes:**
 
 - Some themes require a restart to take effect.
-- The built-in command set is intentionally minimal – FDScript handles the heavy lifting.
+- The built-in command set is clearly designed to be deliberately simple, with FDScript handling the more complex tasks. (However, this is not related to the number of commands I plan to add later.)
 - While FDScript gen 2 offers greater command-line processing capabilities, it's important to note that some poorly planned complexities may produce undesirable results (please report any such issues).
 
 ---
