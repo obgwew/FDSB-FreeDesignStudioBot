@@ -1,4 +1,4 @@
-# Bot Creator For Discord - Local (BCFD-L)
+# FDSB - Free Design Studio Bot's
 
 > Build and run Discord bots locally using **FDScript** — a lightweight scripting language designed specifically for this tool.
 
