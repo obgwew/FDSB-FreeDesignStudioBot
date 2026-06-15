@@ -66,6 +66,7 @@
   - Fix switching languages
   - add 2 languages Fr(French) & De(German)
 
+**After the 2.2.1 update, the project name will officially become FDSB**
 ---
 
 **Developers:** @y.lw (contributor) · [@obgwew](https://github.com/obgwew) (programming)
