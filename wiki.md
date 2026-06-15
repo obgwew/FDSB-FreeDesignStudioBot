@@ -1,6 +1,6 @@
 # FDScript Wiki
 
-> A lightweight scripting language for Discord bots — built into **BCFD-L**.
+> A lightweight scripting language for Discord bots — built into **FDSB**.
 > Scripts run line-by-line; commands start with `$` and take arguments inside `[]` separated by `;`.
 
 ---
