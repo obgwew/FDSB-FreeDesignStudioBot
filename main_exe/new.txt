@@ -1,0 +1,11 @@
+welcome to update 2.2.2
+
+- Fixed server
+
+- Fixed some ui on view command
+
+- Fixed Color-Code
+
+- Fixing more commands & vars
+
+- add 3 languages ch(chinese) & ru(russian) & tr(turkish)
