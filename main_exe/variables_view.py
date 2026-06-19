@@ -11,27 +11,14 @@ import flet as ft
 from main_exe.langs.translations import Translations
 from main_exe.settings           import get_current_lang
 from main_exe.theme_engine       import ThemeEngine
-from main_exe.core_fdsb.FDCore   import set_vars_dir as _fd_set_vars_dir
+from main_exe.core_bcfd.FDCore   import set_vars_dir as _fd_set_vars_dir
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Data sync
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _vars_dir(bot_dir: str) -> str:
-    try:
-        from main_exe.core_fdsb.local_server import get_vars_dir
-        path = get_vars_dir()
-        if path and os.path.isdir(path):
-            return path
-    except Exception:
-        pass
-    return os.path.join(os.path.dirname(os.path.abspath(bot_dir)), 'bot_vars')
-
-
 def _sync_fdcore(bot_dir: str):
-    path = _vars_dir(bot_dir)
-    os.makedirs(path, exist_ok=True)
-    _fd_set_vars_dir(path)
+    _fd_set_vars_dir(_vars_dir(bot_dir))
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  Translation & Language helper
@@ -73,7 +60,7 @@ def _confirm_delete(page: ft.Page, item_name: str, on_confirm: callable):
     def _cancel(_):
         page.pop_dialog()
 
-    msg_template  = _t('delete_confirm') or 'Are you sure you want to delete "{item_name}"?\nThis action cannot be undone.'
+    msg_template = _t('delete_confirm') or 'Are you sure you want to delete  "{item_name}" ?\nThis action cannot be undone.'
     formatted_msg = msg_template.replace('{item_name}', item_name)
 
     dlg = ft.AlertDialog(
@@ -88,7 +75,11 @@ def _confirm_delete(page: ft.Page, item_name: str, on_confirm: callable):
             ],
             spacing=8,
         ),
-        content=ft.Text(_ar(formatted_msg), color=_c('text_dim'), size=13),
+        content=ft.Text(
+            _ar(formatted_msg),
+            color=_c('text_dim'),
+            size=13,
+        ),
         actions=[
             ft.TextButton(
                 content=ft.Text(_t('cancel') or 'Cancel', color=_c('text_dim')),
@@ -97,8 +88,7 @@ def _confirm_delete(page: ft.Page, item_name: str, on_confirm: callable):
             ft.FilledButton(
                 content=ft.Row(
                     [ft.Icon(ft.Icons.DELETE_FOREVER_ROUNDED, color='#FFFFFF', size=16),
-                     ft.Text(_t('delete') or 'Delete', color='#FFFFFF',
-                             weight=ft.FontWeight.BOLD)],
+                     ft.Text(_t('delete') or 'Delete', color='#FFFFFF', weight=ft.FontWeight.BOLD)],
                     spacing=6, tight=True,
                 ),
                 on_click=_do,
@@ -114,71 +104,15 @@ def _confirm_delete(page: ft.Page, item_name: str, on_confirm: callable):
     )
     page.show_dialog(dlg)
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  Unsaved Changes Dialog
-# ══════════════════════════════════════════════════════════════════════════════
-
-def _confirm_unsaved(page: ft.Page, on_save: callable, on_discard: callable):
-    def _do_save(_):
-        page.pop_dialog()
-        on_save()
-
-    def _do_discard(_):
-        page.pop_dialog()
-        on_discard()
-
-    def _cancel(_):
-        page.pop_dialog()
-
-    dlg = ft.AlertDialog(
-        modal=True,
-        bgcolor=_c('card_bg'),
-        shape=ft.RoundedRectangleBorder(radius=16),
-        title=ft.Row(
-            [
-                ft.Icon(ft.Icons.EDIT_NOTE_ROUNDED, color=_c('warning'), size=22),
-                ft.Text(_t('unsaved_title'), weight=ft.FontWeight.BOLD,
-                        color=_c('text'), size=16),
-            ],
-            spacing=8,
-        ),
-        content=ft.Text(_t('unsaved_body'), color=_c('text_dim'), size=13),
-        actions=[
-            ft.TextButton(
-                content=ft.Text(_t('cancel'), color=_c('text_dim')),
-                on_click=_cancel,
-            ),
-            ft.TextButton(
-                content=ft.Text(_t('discard'), color=_c('danger')),
-                on_click=_do_discard,
-            ),
-            ft.FilledButton(
-                content=ft.Row(
-                    [ft.Icon(ft.Icons.SAVE_OUTLINED, color='#FFFFFF', size=16),
-                     ft.Text(_t('save'), color='#FFFFFF', weight=ft.FontWeight.BOLD)],
-                    spacing=6, tight=True,
-                ),
-                on_click=_do_save,
-                style=ft.ButtonStyle(
-                    bgcolor=_c('success'),
-                    color='#FFFFFF',
-                    shape=ft.RoundedRectangleBorder(radius=10),
-                    padding=ft.Padding(left=14, top=8, right=14, bottom=8),
-                ),
-            ),
-        ],
-        actions_alignment=ft.MainAxisAlignment.END,
-    )
-    page.show_dialog(dlg)
-
-
 # ══════════════════════════════════════════════════════════════════════════════
 #  Storage helpers
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _bot_root_from_dir(bot_dir: str) -> str:
     return os.path.dirname(os.path.abspath(bot_dir))
+
+def _vars_dir(bot_dir: str) -> str:
+    return os.path.join(_bot_root_from_dir(bot_dir), 'bot_vars')
 
 def _ensure_vars_dir(bot_dir: str) -> str:
     path = _vars_dir(bot_dir)
@@ -243,10 +177,6 @@ class BotVariablesTab:
         self._edit_path    = ''
         self._current_view = 'list'
 
-        # ── Dirty tracking ────────────────────────────────────────────────────
-        self._is_dirty  = False
-        self._snapshot: dict = {}
-
         self._build_controls()
         self._container = ft.Container(
             content=self._list_root,
@@ -262,51 +192,10 @@ class BotVariablesTab:
 
     def load_bot(self, bot_dir: str):
         self._bot_dir   = bot_dir
-        _sync_fdcore(bot_dir)
         self._variables = _load_all_vars(bot_dir)
+        _sync_fdcore(bot_dir)
         if self._current_view == 'list':
             self._refresh_list()
-
-    # ── Dirty tracking ────────────────────────────────────────────────────────
-
-    def _mark_dirty(self, e=None):
-        cur = {
-            'name':  self._name_inp.value  or '',
-            'value': self._value_inp.value or '',
-        }
-        dirty = cur != self._snapshot
-        if dirty != self._is_dirty:
-            self._is_dirty          = dirty
-            self._dirty_dot.visible = dirty
-            if self._page:
-                self._page.update()
-
-    def _clear_dirty(self):
-        self._snapshot = {
-            'name':  self._name_inp.value  or '',
-            'value': self._value_inp.value or '',
-        }
-        self._is_dirty          = False
-        self._dirty_dot.visible = False
-
-    # ── Back with guard ───────────────────────────────────────────────────────
-
-    def _request_back(self, _):
-        if self._is_dirty:
-            _confirm_unsaved(
-                self._page,
-                on_save=self._save_then_back,
-                on_discard=self._discard_and_back,
-            )
-        else:
-            self._show_list()
-
-    def _save_then_back(self):
-        self._save_variable(None)
-
-    def _discard_and_back(self):
-        self._clear_dirty()
-        self._show_list()
 
     # ── Theme ─────────────────────────────────────────────────────────────────
 
@@ -319,24 +208,24 @@ class BotVariablesTab:
         self._fab.bgcolor             = g('accent')
         self._fab.foreground_color    = g('text_on_accent')
 
-        self._editor_title.color             = g('text')
-        self._editor_breadcrumb.color        = g('text_dim')
-        self._back_btn.bgcolor               = g('accent')
-        self._back_btn.icon_color            = g('text_on_accent')
-        self._dirty_dot.bgcolor              = g('warning')
-        self._name_inp.bgcolor               = g('card_bg')
-        self._name_inp.border_color          = g('card_border')
-        self._name_inp.focused_border_color  = g('accent')
-        self._name_inp.cursor_color          = g('accent')
-        self._value_inp.bgcolor              = g('card_bg')
-        self._value_inp.border_color         = g('card_border')
+        self._editor_title.color            = g('text')
+        self._editor_breadcrumb.color       = g('text_dim')
+        self._del_btn.bgcolor               = g('danger')
+        self._back_btn.bgcolor              = g('accent')
+        self._back_btn.icon_color           = g('text_on_accent')
+        self._name_inp.bgcolor              = g('card_bg')
+        self._name_inp.border_color         = g('card_border')
+        self._name_inp.focused_border_color = g('accent')
+        self._name_inp.cursor_color         = g('accent')
+        self._value_inp.bgcolor             = g('card_bg')
+        self._value_inp.border_color        = g('card_border')
         self._value_inp.focused_border_color = g('accent')
-        self._value_inp.cursor_color         = g('accent')
-        self._save_btn.style                 = _btn_style(g('success'))
-        self._name_lbl.color                 = g('text_dim')
-        self._value_lbl.color                = g('text_dim')
-        self._editor_card.bgcolor            = g('card_bg')
-        self._editor_card.border             = _border_all(1, g('card_border'))
+        self._value_inp.cursor_color        = g('accent')
+        self._save_btn.style                = _btn_style(g('success'))
+        self._name_lbl.color                = g('text_dim')
+        self._value_lbl.color               = g('text_dim')
+        self._editor_card.bgcolor           = g('card_bg')
+        self._editor_card.border            = _border_all(1, g('card_border'))
 
         if self._current_view == 'list':
             self._refresh_list()
@@ -438,7 +327,7 @@ class BotVariablesTab:
             icon_color=_c('text_on_accent'),
             bgcolor=_c('accent'),
             icon_size=16,
-            on_click=self._request_back,
+            on_click=lambda _: self._show_list(),
             style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=8)),
         )
         self._editor_breadcrumb = ft.Text(
@@ -447,15 +336,16 @@ class BotVariablesTab:
         self._editor_title = ft.Text(
             _ar('new.json'), size=13, weight=ft.FontWeight.BOLD, color=_c('text'),
         )
-        self._dirty_dot = ft.Container(
-            width=7, height=7,
-            bgcolor=_c('warning'),
-            border_radius=4,
-            visible=False,
-            tooltip=_t('unsaved_title'),
+        self._del_btn = ft.IconButton(
+            icon=ft.Icons.DELETE_OUTLINE_ROUNDED,
+            icon_color='#FFFFFF',
+            bgcolor=_c('danger'),
+            icon_size=16,
+            on_click=self._ask_delete_from_editor,
+            style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=8)),
         )
 
-        self._name_lbl  = ft.Text(_t('name_label')  or 'Name',  size=10, weight=ft.FontWeight.BOLD, color=_c('text_dim'))
+        self._name_lbl  = ft.Text(_t('name_label') or 'Name',  size=10, weight=ft.FontWeight.BOLD, color=_c('text_dim'))
         self._value_lbl = ft.Text(_t('value_label') or 'Value', size=10, weight=ft.FontWeight.BOLD, color=_c('text_dim'))
 
         self._name_inp = ft.TextField(
@@ -468,7 +358,6 @@ class BotVariablesTab:
             text_style=ft.TextStyle(color=_c('text'), size=13),
             border_radius=8,
             expand=True,
-            on_change=self._mark_dirty,
         )
         self._value_inp = ft.TextField(
             hint_text=_t('var_value_hint') or 'variable_value',
@@ -480,7 +369,6 @@ class BotVariablesTab:
             text_style=ft.TextStyle(color=_c('text'), size=13),
             border_radius=8,
             expand=True,
-            on_change=self._mark_dirty,
         )
 
         self._save_btn = ft.FilledButton(
@@ -496,7 +384,7 @@ class BotVariablesTab:
         self._editor_card = ft.Container(
             content=ft.Column(
                 [
-                    ft.Column([self._name_lbl,  self._name_inp],  spacing=4),
+                    ft.Column([self._name_lbl, self._name_inp],   spacing=4),
                     ft.Divider(height=1, color=_c('card_border')),
                     ft.Column([self._value_lbl, self._value_inp], spacing=4),
                 ],
@@ -516,7 +404,8 @@ class BotVariablesTab:
                             self._back_btn,
                             self._editor_breadcrumb,
                             self._editor_title,
-                            self._dirty_dot,
+                            ft.Container(expand=True),
+                            self._del_btn,
                         ],
                         spacing=6,
                         vertical_alignment=ft.CrossAxisAlignment.CENTER,
@@ -556,7 +445,6 @@ class BotVariablesTab:
     # ── View switching ────────────────────────────────────────────────────────
 
     def _show_list(self):
-        _sync_fdcore(self._bot_dir)
         self._variables    = _load_all_vars(self._bot_dir)
         self._current_view = 'list'
         self._refresh_list()
@@ -568,21 +456,20 @@ class BotVariablesTab:
         self._current_view = 'editor'
 
         if not var_path:
-            self._name_inp.value     = ''
-            self._value_inp.value    = ''
-            self._editor_title.value = _ar('new.json')
+            self._name_inp.value      = ''
+            self._value_inp.value     = ''
+            self._editor_title.value  = _ar('new.json')
+            self._del_btn.visible     = False
         else:
             var  = next((v for v in self._variables if v.get('_path') == var_path), {})
             name = var.get('name', '')
-            self._name_inp.value     = name
-            self._value_inp.value    = var.get('value', '')
-            self._editor_title.value = _ar(f'{name}.json')
+            self._name_inp.value      = name
+            self._value_inp.value     = var.get('value', '')
+            self._editor_title.value  = _ar(f'{name}.json')
+            self._del_btn.visible     = True
 
         self._name_inp.error_text = None
-
-        self._clear_dirty()
-
-        self._container.content = self._editor_root
+        self._container.content   = self._editor_root
         self._page.update()
 
     # ── List rendering ────────────────────────────────────────────────────────
@@ -630,8 +517,7 @@ class BotVariablesTab:
                                 expand=True,
                             ),
                             ft.FilledButton(
-                                content=ft.Text(_t('edit') or 'Edit',
-                                                color=_c('text_on_accent')),
+                                content=ft.Text(_t('edit') or 'Edit', color=_c('text_on_accent')),
                                 on_click=lambda _, p=path: self._open_editor(p),
                                 style=_btn_style(
                                     _c('accent'),
@@ -663,7 +549,7 @@ class BotVariablesTab:
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
         )
 
-    # ── Delete — list only ────────────────────────────────────────────────────
+    # ── Delete with confirm ───────────────────────────────────────────────────
 
     def _ask_delete(self, path: str, name: str):
         _confirm_delete(
@@ -672,15 +558,28 @@ class BotVariablesTab:
             on_confirm=lambda: self._do_delete(path),
         )
 
+    def _ask_delete_from_editor(self, _):
+        name = (self._name_inp.value or '').strip() or 'this variable'
+        _confirm_delete(
+            self._page,
+            item_name=name,
+            on_confirm=self._do_delete_from_editor,
+        )
+
     def _do_delete(self, path: str):
         _delete_var(path)
-        _sync_fdcore(self._bot_dir)
+        _sync_fdcore(self._bot_dir) 
+        self._show_list()
+
+    def _do_delete_from_editor(self):
+        if self._edit_path:
+            _delete_var(self._edit_path)
         self._show_list()
 
     # ── Save ─────────────────────────────────────────────────────────────────
 
     def _save_variable(self, _):
-        name  = (self._name_inp.value  or '').strip()
+        name  = (self._name_inp.value or '').strip()
         value = (self._value_inp.value or '').strip()
 
         if not name:
@@ -694,10 +593,6 @@ class BotVariablesTab:
             print('[Variables] bot_dir not set')
             return
 
-        self._edit_path = _write_var(
-            self._bot_dir, name, value, self._edit_path
-        )
+        _write_var(self._bot_dir, name, value, self._edit_path)
         _sync_fdcore(self._bot_dir)
-
-        self._clear_dirty()
         self._show_list()

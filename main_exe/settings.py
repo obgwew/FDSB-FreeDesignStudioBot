@@ -7,14 +7,16 @@
 import os
 import sys
 import json
-import time
 import zipfile
 import webbrowser
 import random
 import shutil
 import subprocess
+import threading
 
 import flet as ft
+import arabic_reshaper
+from bidi.algorithm import get_display
 
 from main_exe.langs.translations import Translations
 from main_exe.theme_engine import ThemeEngine
@@ -109,21 +111,32 @@ _LANG_LABELS: dict[str, str] = {
     'ar': 'العربية',
     'fr': 'Français',
     'de': 'Deutsch',
-    'tr': 'Türkçe',
-    'ch': '中文',
-    'ru': 'Русский',
-        
+    
     # soon...
     'es': 'Español',
     'ja': '日本語',
-    'hi': 'हिंदी',
+    'tr': 'Türkçe',
+    'ru': 'Русский',
 }
+
+def reshape_arabic(text: str) -> str:
+    if not isinstance(text, str):
+        return text
+    reshaped_text = arabic_reshaper.reshape(text)
+    bidi_text = get_display(reshaped_text)
+    return bidi_text
 
 def _t(key: str) -> str:
     val = Translations.get(key, get_current_lang())
     if val and val != key:
         return val
     return _FALLBACKS.get(key, key)
+
+def _ar(text: str) -> str:
+    if get_current_lang() in ['ar', 'arabic', 'AR']:
+        return reshape_arabic(text)
+    return text
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  Theme color shortcut
@@ -328,27 +341,14 @@ def apply_theme_globally(theme_key: str):
 #  App restart helper
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _restart_app(page: ft.Page = None):
+def _restart_app():
     base_dir  = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    bcfd_path = os.path.normpath(os.path.join(base_dir, 'FDSB.py'))
+    bcfd_path = os.path.normpath(os.path.join(base_dir, 'BCFD.py'))
     try:
         subprocess.Popen([sys.executable, bcfd_path])
     except Exception as e:
         print(f'[Settings] Relaunch failed: {e}')
-
-    if page is not None:
-        for _attempt in (
-            lambda: page.window.close(),
-            lambda: page.window.destroy(),
-            lambda: page.window_close(),
-        ):
-            try:
-                _attempt()
-                break
-            except Exception:
-                continue
-
-    os._exit(0)
+    sys.exit(0)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -376,19 +376,20 @@ def _card_container(content: ft.Control) -> ft.Container:
 class BotSettingsTab:
 
     def __init__(self, page: ft.Page, bot_data: dict = None,
-                 on_bot_save=None, on_theme_change=None, on_lang_change=None):
-        self._page              = page
-        self._bot_data          = bot_data or {}
-        self._on_bot_save       = on_bot_save
-        self._on_theme_change   = on_theme_change
-        self._on_lang_change_cb = on_lang_change
-        self._loading_overlay: ft.Control | None = None
-        self._is_committing   = False
+                 on_bot_save=None, on_theme_change=None):
+        self._page            = page
+        self._bot_data        = bot_data or {}
+        self._on_bot_save     = on_bot_save
+        self._on_theme_change = on_theme_change
 
         self._lang          = get_current_lang()
         self._current_theme = get_current_theme()
         self._theme_btns: dict[str, ft.FilledButton] = {}
         self._ext_ui_active = _ui_profile_fixed()
+
+        # ── Debounce state for theme selection ────────────────────────────────
+        self._theme_timer: threading.Timer | None = None
+        self._theme_lock  = threading.Lock()
 
         self._export_status_text = ft.Text('', size=11, color=_c('success'))
 
@@ -445,13 +446,10 @@ class BotSettingsTab:
         self._design_col = ft.Column(spacing=4)
         self._lang_dropdown: ft.Dropdown = None
 
-        # root column reference — set in build(), used by _rebuild_in_place()
-        self._root_col: ft.Column = None
-
     # ── Build ─────────────────────────────────────────────────────────────────
 
     def build(self) -> ft.Control:
-        self._root_col = ft.Column(
+        return ft.Column(
             [
                 ft.Column(
                     [
@@ -469,27 +467,6 @@ class BotSettingsTab:
             ],
             expand=True,
         )
-        return self._root_col
-
-    # ── In-place rebuild (language change without parent callback) ────────────
-
-    def _rebuild_in_place(self):
-        """Rebuild every section in the current column — no parent callback
-        needed. Mirrors what the theme fallback does for buttons, but for
-        the full tab content. Safe to call from any code path that needs a
-        UI refresh without restarting the app."""
-        if self._root_col is None:
-            return
-        inner = self._root_col.controls[0]
-        inner.controls = [
-            self._build_general_section(),
-            self._build_export_section(),
-            self._build_design_section(),
-            self._build_info_section(),
-            self._build_delete_section(),
-            ft.Container(height=16),
-        ]
-        self._page.update()
 
     # ── Section: General ──────────────────────────────────────────────────────
 
@@ -564,44 +541,6 @@ class BotSettingsTab:
             on_select=self._on_lang_change,
         )
 
-    # ── Loading overlay ───────────────────────────────────────────────────────
-
-    def _show_loading(self, message: str = 'Applying changes…'):
-        if self._loading_overlay is not None:
-            return
-        self._loading_overlay = ft.Container(
-            content=ft.Column(
-                [
-                    ft.ProgressRing(color=_c('accent'), width=36, height=36, stroke_width=3),
-                    ft.Text(message, color=_c('text_dim'), size=12),
-                ],
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                alignment=ft.MainAxisAlignment.CENTER,
-                spacing=10,
-            ),
-            bgcolor=_c('bg') + 'EE',
-            expand=True,
-            alignment=ft.Alignment(0, 0),
-        )
-        try:
-            self._page.overlay.append(self._loading_overlay)
-            self._page.update()
-        except Exception as e:
-            print(f'[Settings] _show_loading failed: {e}')
-            self._loading_overlay = None
-
-    def hide_loading(self):
-        if self._loading_overlay is None:
-            return
-        try:
-            if self._loading_overlay in self._page.overlay:
-                self._page.overlay.remove(self._loading_overlay)
-            self._page.update()
-        except Exception as e:
-            print(f'[Settings] hide_loading failed: {e}')
-        finally:
-            self._loading_overlay = None
-
     # ── Language change handler ───────────────────────────────────────────────
 
     def _on_lang_change(self, e: ft.ControlEvent):
@@ -609,24 +548,7 @@ class BotSettingsTab:
         if not selected or selected == self._lang:
             return
         save_settings({'lang': selected})
-        self._lang = selected
-
-        self._show_loading('Applying language…')
-
-        _start = time.monotonic()
-        try:
-            if self._on_lang_change_cb:
-                self._on_lang_change_cb(selected)
-            elif self._on_theme_change:
-                self._on_theme_change(self._current_theme)
-            else:
-                self._rebuild_in_place()
-        finally:
-            _elapsed = time.monotonic() - _start
-            _min_visible = 0.35
-            if _elapsed < _min_visible:
-                time.sleep(_min_visible - _elapsed)
-            self.hide_loading()
+        _restart_app()
 
     # ── Section: Export ───────────────────────────────────────────────────────
 
@@ -689,8 +611,8 @@ class BotSettingsTab:
 
     def _build_info_section(self) -> ft.Control:
         rows = [
-            ('wiki',    'https://github.com/obgwew/FDSB/blob/main/wiki.md'),
-            ('github',  'https://github.com/obgwew/FDSB'),
+            ('wiki',    'https://github.com/obgwew/BCFD-L/blob/main/wiki.md'),
+            ('github',  'https://github.com/obgwew/BCFD-L'),
             ('discord', 'https://discord.gg/JngaJRC6Y9'),
         ]
         return ft.Column(
@@ -858,52 +780,48 @@ class BotSettingsTab:
     # ── Theme selection ───────────────────────────────────────────────────────
 
     def _select_theme(self, theme_key: str):
-        if self._is_committing:
-            return
-        self._commit_theme(theme_key)
+        """Debounce rapid theme clicks — only the last selection within 150 ms fires."""
+        with self._theme_lock:
+            if self._theme_timer is not None:
+                self._theme_timer.cancel()
+            self._theme_timer = threading.Timer(
+                0.15, self._commit_theme, args=[theme_key]
+            )
+            self._theme_timer.start()
 
     def _commit_theme(self, theme_key: str):
-        if self._is_committing:
-            return
-        self._is_committing = True
+        """Apply the chosen theme and trigger a full UI rebuild via the parent."""
+        with self._theme_lock:
+            self._theme_timer = None
 
-        _commit_start = time.monotonic()
-        try:
-            self._show_loading('Applying theme…')
+        apply_theme_globally(theme_key)
+        self._current_theme = theme_key
 
-            apply_theme_globally(theme_key)
-            self._current_theme  = theme_key
-            self._page.bgcolor   = _c('bg')
+        # Update page background to match the new theme immediately.
+        self._page.bgcolor = _c('bg')
 
-            if _ui_profile_fixed() and not self._ext_ui_active:
-                self._ext_ui_active = True
+        if _ui_profile_fixed() and not self._ext_ui_active:
+            self._ext_ui_active = True
 
-            if self._on_theme_change:
-                self._on_theme_change(theme_key)
-            else:
-                for key, btn in self._theme_btns.items():
-                    active = key == theme_key
-                    btn.content = ft.Text(
-                        '✓' if active else '>',
-                        color='#FFFFFF' if active else _c('text_dim'),
-                        weight=ft.FontWeight.BOLD,
-                    )
-                    btn.style = ft.ButtonStyle(
-                        bgcolor=_c('accent') if active else _c('card_border'),
-                        color='#FFFFFF',
-                        shape=ft.RoundedRectangleBorder(radius=8),
-                        padding=ft.Padding(left=12, top=4, right=12, bottom=4),
-                    )
-                self._page.update()
-
-            _elapsed = time.monotonic() - _commit_start
-            _min_visible = 0.35
-            if _elapsed < _min_visible:
-                time.sleep(_min_visible - _elapsed)
-        finally:
-            self.hide_loading()
-            self._is_committing = False
-
+        # Delegate full rebuild to parent — avoids partial/stale control updates.
+        if self._on_theme_change:
+            self._on_theme_change(theme_key)
+        else:
+            # Fallback: rebuild only the theme buttons if no parent callback given.
+            for key, btn in self._theme_btns.items():
+                active = key == theme_key
+                btn.content = ft.Text(
+                    '✓' if active else '>',
+                    color='#FFFFFF' if active else _c('text_dim'),
+                    weight=ft.FontWeight.BOLD,
+                )
+                btn.style = ft.ButtonStyle(
+                    bgcolor=_c('accent') if active else _c('card_border'),
+                    color='#FFFFFF',
+                    shape=ft.RoundedRectangleBorder(radius=8),
+                    padding=ft.Padding(left=12, top=4, right=12, bottom=4),
+                )
+            self._page.update()
 
     # ── Export ────────────────────────────────────────────────────────────────
 
@@ -962,6 +880,7 @@ class BotSettingsTab:
                 pass
 
             self._export_status_text.color = _c('success')
+            self._export_status_text.value = _ar(f'✓ exports/{zip_name}')
 
         except Exception as e:
             print(f'[Settings] Export failed: {e}')
@@ -1005,7 +924,7 @@ class BotSettingsTab:
         if self._on_bot_save:
             self._on_bot_save({})
 
-        _restart_app(self._page)
+        _restart_app()
 
     # ── Save Bot ──────────────────────────────────────────────────────────────
 

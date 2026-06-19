@@ -1,13 +1,10 @@
 # -*- coding: utf-8 -*-
 # main_exe/langs/translations.py
 
+from .de import GERMAN_DICT
+from .fr import FRENCH_DICT
 from .ar import ARABIC_DICT
 from .en import ENGLISH_DICT
-from .fr import FRENCH_DICT
-from .de import GERMAN_DICT
-from .ch import CHINESE_DICT
-from .ru import RUSSIAN_DICT
-from .tr import TURKISH_DICT
 
 
 class Translations:
@@ -18,9 +15,6 @@ class Translations:
         'en': ENGLISH_DICT,
         'fr': FRENCH_DICT,
         'de': GERMAN_DICT,
-        'ch': CHINESE_DICT,
-        'ru': RUSSIAN_DICT,
-        'tr': TURKISH_DICT
     }
 
     @staticmethod

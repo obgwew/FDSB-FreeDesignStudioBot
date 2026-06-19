@@ -288,14 +288,14 @@ class BotMainTab:
         self._set_online_state(new_state)
         if new_state:
             try:
-                from main_exe.core_fdsb import local_server
+                from main_exe.core_bcfd import local_server
                 local_server.start_bot(self._bot_data.get('bot_dir', ''))
             except Exception as e:
                 print(f'[Dashboard] start failed: {e}')
                 self._set_online_state(False)
         else:
             try:
-                from main_exe.core_fdsb import local_server
+                from main_exe.core_bcfd import local_server
                 local_server.stop_bot()
             except Exception as e:
                 print(f'[Dashboard] stop failed: {e}')
@@ -326,7 +326,7 @@ class BotDashboardScreen:
             text_align=ft.TextAlign.CENTER,
         )
 
-        # ── main ───────────────────────
+        # ── زر الرجوع — يظهر فقط في تاب main ───────────────────────
         self._back_btn = ft.IconButton(
             icon=ft.Icons.ARROW_BACK_ROUNDED,
             icon_color='#FFFFFF',
@@ -336,6 +336,7 @@ class BotDashboardScreen:
             style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=8)),
             visible=True,
         )
+        # ─────────────────────────────────────────────────────────────
 
         self._main_tab      = BotMainTab(page)
         self._commands_tab  = BotCommandsTab(page)
@@ -365,10 +366,6 @@ class BotDashboardScreen:
         self._nav_bar.bgcolor         = get('nav_bg')
         self._nav_bar.indicator_color = get('nav_active')
         self._back_btn.bgcolor        = get('accent')
-
-        if hasattr(self, '_content'):
-            self._content.content = self._tab_views[self._active].build()
-
         self._page.update()
 
     # ── Build ─────────────────────────────────────────────────────────────────

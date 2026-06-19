@@ -1,11 +1,11 @@
-welcome to update 2.2.2
+welcome to update 2.2.1
 
-- Fixed server
+- Fixed vars commands
 
-- Fixed some ui on view command
+- Fixed prefix logical
 
-- Fixed Color-Code
+- Fixing theme switching 
 
-- Fixing more commands & vars
+- Fix switching languages
 
-- add 3 languages ch(chinese) & ru(russian) & tr(turkish)
+- add 2 languages Fr(French) & De(German)

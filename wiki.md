@@ -83,11 +83,6 @@
 - [`$returnGuildRolesID`](#returnguildrolesid)
 - [`$returnGetReactions`](#returngetreactions)
 
-### Events
-- [`$onJoined`](#onjoined)
-- [`$onLeave`](#onleave)
-- [`$alwaysReply`](#alwaysreply)
-
 ### Reference
 - [Separators](#separators)
 - [Color Names](#color-names)
@@ -134,7 +129,7 @@ Your channel is #general.
 Comments can appear at the end of any line, outside brackets. Everything after a bare `#` at bracket depth 0 is ignored.
 
 ```
-$var[score; 100]           # set initial score
+$var[score; 100]        # set initial score
 $sendMessage[$var[score]]  # send it
 ```
 
@@ -815,7 +810,7 @@ $replyIn[10s]
 $sendMessage[This message will appear 10 seconds later.]
 ```
 
-> **Note:** Maximum delay is 40 light-years. We recommend staying under that.
+> **Note:** Maximum delay is 40 light-years. We recommend staying under that. 
 
 ---
 
@@ -1050,100 +1045,6 @@ $sendMessage[Total 👍 votes: $return[voteCount]]
 
 ---
 
-## Events
-
-Event scripts are triggered automatically by Discord events rather than user commands. They use a special first-line syntax to declare their type and target channel.
-
-**First-line format:**
-```
-#PREFIX:$eventName[channelID]
-```
-
-The `channelID` in the first line tells the bot where to send any messages produced by the script. The rest of the file is a normal FDScript.
-
----
-
-## `$onJoined`
-
-Triggered when a new member joins the server.
-
-**First line:**
-```
-#PREFIX:$onJoined[channelID]
-```
-
-**Available variables:**
-
-| Variable | Value |
-|----------|-------|
-| `$authorID` | ID of the member who joined |
-| `$authorName` | Username of the member who joined |
-| `$mention` | Mention string of the member (`<@id>`) |
-| `$channelID` | ID of the target channel (from the first line) |
-| `$channelName` | Name of the target channel |
-| `$guildID` | Numeric ID of the server |
-| `$guildName` | Name of the server |
-| `$botID` | Numeric ID of the bot |
-| `$botName` | Username of the bot |
-
-> `$message` and `$messageID` are **not available** — there is no triggering message in this event.
-
-**Example:**
-```
-#PREFIX:$onJoined[123456789012345678]
-$sendMessage[Welcome to the server, $mention! 🎉]
-```
-
----
-
-## `$onLeave`
-
-Triggered when a member leaves or is removed from the server.
-
-**First line:**
-```
-#PREFIX:$onLeave[channelID]
-```
-
-**Available variables:** Same as [`$onJoined`](#onjoined) — the member data refers to the user who left.
-
-> `$message` and `$messageID` are **not available**.
-
-**Example:**
-```
-#PREFIX:$onLeave[123456789012345678]
-$sendMessage[**$authorName** has left the server. 👋]
-```
-
----
-
-## `$alwaysReply`
-
-Triggered on **every message** sent in the server (by non-bot users). Unlike command scripts, there is no trigger prefix — the script runs for all messages.
-
-All output is automatically sent as a **reply** to the triggering message. No need for `$reply`.
-
-**First line:**
-```
-#PREFIX:$alwaysReply
-```
-
-**Available variables:** All standard built-in variables are available.
-
-> **`$message` behavior:** Returns the **full message content** — not just text after a trigger, since there is no trigger prefix in this event.
-
-**Example:**
-```
-#PREFIX:$alwaysReply
-$if[$message == hello]
-$sendMessage[Hello there, $mention! 👋]
-$endif
-```
-
-> **Warning:** This event fires on every single message in the server. Use conditions carefully to avoid the bot responding to everything.
-
----
-
 ## Separators
 
 Commands that return lists accept a `separator` argument. Pass a literal character or a named alias.
@@ -1257,22 +1158,4 @@ $randomstr[Warrior; Mage; Rogue; Healer]
 
 ---
 
-### Welcome message on join
-```
-#PREFIX:$onJoined[123456789012345678]
-$sendMessage[Welcome $mention! You are member number $membersCount. 🎉]
-```
-
----
-
-### Auto-reply to greetings
-```
-#PREFIX:$alwaysReply
-$if[$or[$message == hello; $message == hi; $message == hey]]
-$sendMessage[Hey $mention! 👋]
-$endif
-```
-
----
-
-*FDScript is part of [BCFD-L](https://github.com/obgwew/BCFD-L) — licensed under AGPLv3.*
+*FDScript is part of [BCFD-L](https://github.com/obgwew/BCFD-L) — licensed under GPL v3.*

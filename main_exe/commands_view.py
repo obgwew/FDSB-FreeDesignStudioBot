@@ -4,6 +4,7 @@
 # -*- coding: utf-8 -*-
 # main_exe/commands_view.py . migrated to Flet 0.80+ / v1 API
 
+import cmd
 import os
 import flet as ft
 import re
@@ -14,10 +15,11 @@ from main_exe.langs.translations import Translations
 from main_exe.settings import get_current_lang
 
 try:
-    from main_exe.core_fdsb.FDCore import KNOWN_COMMANDS
+    from main_exe.core_bcfd.FDCore import KNOWN_COMMANDS
 except ImportError:
     KNOWN_COMMANDS = set()
-    
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  Translation & Language helper
 # ══════════════════════════════════════════════════════════════════════════════
@@ -36,17 +38,21 @@ def _c(key: str) -> str:
     return ThemeEngine.hex(key)
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  Constants & Syntax Rules
+#  Syntax Highlighting Helper
 # ══════════════════════════════════════════════════════════════════════════════
 
-CONTROL_FLOW_COMMANDS = {
-    "if", "elif", "else", "endif", "while", "endwhile", "for", "endfor",
-    "break", "return", "and", "or", "onlyIf", "onlyAdmin", "log"
-}
+def _get_command_color(word: str) -> str or None:
+    if word not in KNOWN_COMMANDS:
+        return None
+    control_flow = {
+        "if", "elif", "else", "endif", "while", "endwhile", "for", "endfor",
+        "break", "return", "and", "or", "onlyIf", "onlyAdmin", "log"
+    }
+    if word in control_flow:
+        return "#64008B"
+    else:
+        return "#22B9FF"
 
-_HL_FONT_SIZE   = 12    
-_HL_LINE_HEIGHT = 1.5   
-_HL_FONT_FAMILY = "Consolas"
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  File utilities
@@ -231,69 +237,6 @@ def _confirm_delete(page: ft.Page, item_name: str, on_confirm: callable):
     )
     page.show_dialog(dlg)
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  Unsaved Changes Dialog
-# ══════════════════════════════════════════════════════════════════════════════
-
-def _confirm_unsaved(page: ft.Page, on_save: callable, on_discard: callable):
-    def _do_save(_):
-        page.pop_dialog()
-        on_save()
-
-    def _do_discard(_):
-        page.pop_dialog()
-        on_discard()
-
-    def _cancel(_):
-        page.pop_dialog()
-
-    dlg = ft.AlertDialog(
-        modal=True,
-        bgcolor=_c('card_bg'),
-        shape=ft.RoundedRectangleBorder(radius=16),
-        title=ft.Row(
-            [
-                ft.Icon(ft.Icons.EDIT_NOTE_ROUNDED, color=_c('warning'), size=22),
-                ft.Text(_t('unsaved_title'), weight=ft.FontWeight.BOLD,
-                        color=_c('text'), size=16),
-            ],
-            spacing=8,
-        ),
-        content=ft.Text(
-            _t('unsaved_body'),
-            color=_c('text_dim'),
-            size=13,
-        ),
-        actions=[
-            ft.TextButton(
-                content=ft.Text(_t('cancel'), color=_c('text_dim')),
-                on_click=_cancel,
-            ),
-            ft.TextButton(
-                content=ft.Text(_t('discard'), color=_c('danger')),
-                on_click=_do_discard,
-            ),
-            ft.FilledButton(
-                content=ft.Row(
-                    [ft.Icon(ft.Icons.SAVE_OUTLINED, color='#FFFFFF', size=16),
-                     ft.Text(_t('save'), color='#FFFFFF', weight=ft.FontWeight.BOLD)],
-                    spacing=6, tight=True,
-                ),
-                on_click=_do_save,
-                style=ft.ButtonStyle(
-                    bgcolor=_c('success'),
-                    color='#FFFFFF',
-                    shape=ft.RoundedRectangleBorder(radius=10),
-                    padding=ft.Padding(left=14, top=8, right=14, bottom=8),
-                ),
-            ),
-        ],
-        actions_alignment=ft.MainAxisAlignment.END,
-    )
-    page.show_dialog(dlg)
-
-
 # ══════════════════════════════════════════════════════════════════════════════
 #  CommandEditorView
 # ══════════════════════════════════════════════════════════════════════════════
@@ -307,15 +250,9 @@ class CommandEditorView:
         self._cmd_path = ''
         self._debounce_timer = None
 
-        # ── Dirty-tracking ────────────────────────────────────────────────────
-        self._is_dirty = False
-        self._snapshot: dict = {}
-
-        self._hl_colors = {}
-
         self._name_field = ft.TextField(
             label=_t('name_label'),
-            hint_text=_t('commands_label'),
+            hint_text=_t('name_hint'),
             dense=True,
             border_color=_c('card_border'),
             focused_border_color=_c('accent'),
@@ -324,7 +261,6 @@ class CommandEditorView:
             cursor_color=_c('accent'),
             bgcolor=_c('card_bg'),
             expand=True,
-            on_change=self._mark_dirty,
         )
         self._prefix_field = ft.TextField(
             label=_t('prefix_label'),
@@ -348,12 +284,7 @@ class CommandEditorView:
             read_only=True,
             multiline=True,
             text_align=ft.TextAlign.RIGHT,
-            text_style=ft.TextStyle(
-                color=_c('text_dim'),
-                size=_HL_FONT_SIZE,
-                font_family=_HL_FONT_FAMILY,
-                height=_HL_LINE_HEIGHT,
-            ),
+            text_style=ft.TextStyle(color=_c('text_dim'), size=12, font_family="Consolas"),
             bgcolor=_c('card_bg'),
             border=ft.InputBorder.NONE,
             cursor_color='transparent',
@@ -362,29 +293,19 @@ class CommandEditorView:
         )
 
         self._highlighter = ft.Text(
-            size=_HL_FONT_SIZE,
-            font_family=_HL_FONT_FAMILY,
+            size=12,
+            font_family="Consolas",
             selectable=False,
-            style=ft.TextStyle(
-                height=_HL_LINE_HEIGHT,
-                font_family=_HL_FONT_FAMILY,
-                size=_HL_FONT_SIZE,
-            ),
         )
 
         self._code_edit = ft.TextField(
             hint_text=_t('fdscript_hint'),
             multiline=True,
             min_lines=18,
-            text_style=ft.TextStyle(
-                color='transparent',
-                size=_HL_FONT_SIZE,
-                font_family=_HL_FONT_FAMILY,
-                height=_HL_LINE_HEIGHT,
-            ),
+            text_style=ft.TextStyle(color='transparent', size=12, font_family="Consolas"),
             bgcolor='transparent',
             border=ft.InputBorder.NONE,
-            cursor_color=_c('syntax_cmd'),
+            cursor_color=_c('accent'),
             content_padding=8,
             expand=True,
             on_change=self._on_code_change,
@@ -393,15 +314,6 @@ class CommandEditorView:
         self._title_text = ft.Text(
             _ar('New.py'), size=13, weight=ft.FontWeight.BOLD, color=_c('text')
         )
-        
-        self._dirty_dot = ft.Container(
-            width=7, height=7,
-            bgcolor=_c('warning'),
-            border_radius=4,
-            visible=False,
-            tooltip=_t('unsaved_title'),
-        )
-
         self._save_btn = ft.FilledButton(
             content=ft.Row(
                 [ft.Icon(ft.Icons.SAVE_OUTLINED, color='#FFFFFF'),
@@ -420,86 +332,26 @@ class CommandEditorView:
 
         ThemeEngine.subscribe(self._on_theme)
 
-    # ── Dirty tracking ────────────────────────────────────────────────────────
-
-    def _mark_dirty(self, e=None):
-        cur = {
-            'name':    self._name_field.value   or '',
-            'prefix':  self._prefix_field.value or '',
-            'content': self._code_edit.value    or '',
-        }
-        dirty = cur != self._snapshot
-        if dirty != self._is_dirty:
-            self._is_dirty         = dirty
-            self._dirty_dot.visible = dirty
-            if self._page:
-                self._page.update()
-
-    def _clear_dirty(self):
-        self._snapshot = {
-            'name':    self._name_field.value   or '',
-            'prefix':  self._prefix_field.value or '',
-            'content': self._code_edit.value    or '',
-        }
-        self._is_dirty          = False
-        self._dirty_dot.visible = False
-
-    # ── Back button with guard ────────────────────────────────────────────────
-
-    def _request_back(self, _):
-        if self._is_dirty:
-            _confirm_unsaved(
-                self._page,
-                on_save=self._save_then_back,
-                on_discard=self._discard_and_back,
-            )
-        else:
-            self._on_back and self._on_back()
-
-    def _save_then_back(self):
-        self._save(None)
-        self._on_back and self._on_back()
-
-    def _discard_and_back(self):
-        self._clear_dirty()
-        self._on_back and self._on_back()
-
     # ── Theme ─────────────────────────────────────────────────────────────────
 
     def _on_theme(self, data: dict):
-        g = lambda k, default='#888888': data.get(k, default)
+        g = lambda k: data.get(k, '#888888')
 
         for field in (self._name_field, self._prefix_field):
             field.border_color         = g('card_border')
-            field.focused_border_color = g('syntax_cmd')
+            field.focused_border_color = g('accent')
             field.bgcolor              = g('card_bg')
-            field.cursor_color         = g('syntax_cmd')
+            field.cursor_color         = g('accent')
             field.label_style          = ft.TextStyle(color=g('text_dim'), size=11)
             field.text_style           = ft.TextStyle(color=g('text'), size=12)
 
-        self._code_edit.cursor_color = g('syntax_cmd')
-        self._line_nums.text_style   = ft.TextStyle(
-            color=g('text_dim'),
-            size=_HL_FONT_SIZE,
-            font_family=_HL_FONT_FAMILY,
-            height=_HL_LINE_HEIGHT,
-        )
-        self._line_nums.bgcolor = g('card_bg')
-        self._lines_lbl.color   = g('text')
-        self._chars_lbl.color   = g('text')
-        self._title_text.color  = g('text')
-        self._save_btn.style    = _btn_style(g('success'))
-        self._dirty_dot.bgcolor = g('warning')
-
-        self._hl_colors = {
-            'base':    g('success',              '#2ECC71'),
-            'control': g('syntax_control_flow',  '#9B59B6'),
-            'known':   g('syntax_cmd',            '#3498DB'),
-            'bracket': g('syntax_brackets',       '#FC2323'),
-            'semi':    g('syntax_semicolon',      '#8A200D'),
-            'string':  g('warning',               '#FC2323'),
-            'comment': g('text_dim',              '#7F8C8D'),
-        }
+        self._code_edit.cursor_color = g('accent')
+        self._line_nums.text_style   = ft.TextStyle(color=g('text_dim'), size=12, font_family="Consolas")
+        self._line_nums.bgcolor      = g('card_bg')
+        self._lines_lbl.color        = g('text')
+        self._chars_lbl.color        = g('text')
+        self._title_text.color       = g('text')
+        self._save_btn.style         = _btn_style(g('success'))
 
         self._apply_highlights()
 
@@ -513,13 +365,12 @@ class CommandEditorView:
                         icon=ft.Icons.ARROW_BACK_ROUNDED,
                         icon_color=_c('text_on_accent'),
                         bgcolor=_c('accent'),
-                        on_click=self._request_back,
+                        on_click=lambda _: self._on_back and self._on_back(),
                         style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=8)),
                         icon_size=16,
                     ),
                     ft.Text(_t('commands_slash'), size=13, color=_c('text_dim')),
                     self._title_text,
-                    self._dirty_dot,
                 ],
                 spacing=6,
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
@@ -567,7 +418,7 @@ class CommandEditorView:
                                     self._code_edit,
                                 ],
                                 expand=True,
-                            ),
+                            )
                         ],
                         spacing=0,
                         vertical_alignment=ft.CrossAxisAlignment.START,
@@ -592,11 +443,9 @@ class CommandEditorView:
                         ft.Container(
                             content=ft.Column(
                                 [
-                                    ft.Text(_t('info_command'), size=11,
-                                            weight=ft.FontWeight.BOLD, color=_c('text_dim')),
+                                    ft.Text(_t('info_command'), size=11, weight=ft.FontWeight.BOLD, color=_c('text_dim')),
                                     info_card,
-                                    ft.Text(_t('command_editor'), size=12,
-                                            weight=ft.FontWeight.BOLD, color=_c('text')),
+                                    ft.Text(_t('command_editor'), size=12, weight=ft.FontWeight.BOLD, color=_c('text')),
                                     editor_area,
                                 ],
                                 spacing=10,
@@ -623,18 +472,13 @@ class CommandEditorView:
 
     def _on_prefix_change(self, e):
         prefix = (e.control.value or '').strip()
-        self._update_dest_indicator(prefix)
-        self._mark_dirty()
-
-    def _update_dest_indicator(self, prefix: str):
         if _is_event_prefix(prefix):
             self._dest_indicator.value = _t('dest_event')
             self._dest_indicator.color = '#22B9FF'
         else:
             self._dest_indicator.value = _t('dest_cmd')
             self._dest_indicator.color = _c('text_dim')
-        if self._page:
-            self._page.update()
+        self._page.update()
 
     # ── Highlighting ──────────────────────────────────────────────────────────
 
@@ -645,64 +489,48 @@ class CommandEditorView:
             if not text:
                 self._highlighter.spans = []
                 self._highlighter.value = ''
-                if self._page:
-                    self._page.update()
+                self._page.update()
                 return
 
-            known_cmds = set(KNOWN_COMMANDS) if KNOWN_COMMANDS else set()
-            control_flow_escaped = '|'.join(
-                sorted(CONTROL_FLOW_COMMANDS, key=len, reverse=True)
-            )
-            known_escaped = '|'.join(
-                sorted(known_cmds - CONTROL_FLOW_COMMANDS, key=len, reverse=True)
-            )
-
-            c_flow_regex = rf'\$(?:{control_flow_escaped})\b' if control_flow_escaped else r'(?!)'
-            known_regex  = rf'\$(?:{known_escaped})\b'        if known_escaped        else r'(?!)'
-
-            master_pattern = rf'(#.*|\".*?\"|\'.*?\'|{c_flow_regex}|{known_regex}|[\[\];])'
-            parts = re.split(master_pattern, text)
-
-            spans  = []
-            colors = self._hl_colors
-            base_color = colors.get('base', '#2ECC71')
+            parts       = re.split(r'(\$[a-zA-Z0-9_]+|[\[\];])', text)
+            spans       = []
+            base_color  = _c('text')
+            BRACKET_COLOR   = "#F84B4B"
+            SEMICOLON_COLOR = "#FF9500"
 
             for part in parts:
                 if not part:
                     continue
 
-                part_color = base_color
-
-                if part.startswith('#'):
-                    part_color = colors.get('comment', base_color)
-                elif part.startswith('"') or part.startswith("'"):
-                    part_color = colors.get('string', base_color)
-                elif part in ('[', ']'):
-                    part_color = colors.get('bracket', base_color)
+                if part in ('[', ']'):
+                    spans.append(ft.TextSpan(
+                        part,
+                        ft.TextStyle(color=BRACKET_COLOR, weight=ft.FontWeight.BOLD, font_family="Consolas"),
+                    ))
                 elif part == ';':
-                    part_color = colors.get('semi', base_color)
-                elif part.startswith('$'):
+                    spans.append(ft.TextSpan(
+                        part,
+                        ft.TextStyle(color=SEMICOLON_COLOR, weight=ft.FontWeight.BOLD, font_family="Consolas"),
+                    ))
+                elif part.startswith('$') and len(part) > 1:
                     cmd_name = part[1:]
-                    if cmd_name in CONTROL_FLOW_COMMANDS:
-                        part_color = colors.get('control', base_color)
-                    elif cmd_name in known_cmds:
-                        part_color = colors.get('known', base_color)
-
-                spans.append(ft.TextSpan(
-                    part,
-                    ft.TextStyle(
-                        color=part_color,
-                        size=_HL_FONT_SIZE,
-                        height=_HL_LINE_HEIGHT,
-                        font_family=_HL_FONT_FAMILY,
-                        weight=ft.FontWeight.W_400,
-                    ),
-                ))
+                    color    = _get_command_color(cmd_name)
+                    spans.append(ft.TextSpan(
+                        part,
+                        ft.TextStyle(
+                            color=color if color else base_color,
+                            weight=ft.FontWeight.BOLD if color else ft.FontWeight.W_400,
+                            font_family="Consolas",
+                        ),
+                    ))
+                else:
+                    spans.append(ft.TextSpan(
+                        part,
+                        ft.TextStyle(color=base_color, font_family="Consolas"),
+                    ))
 
             self._highlighter.spans = spans
-            if self._page:
-                self._page.update()
-
+            self._page.update()
         except Exception:
             pass
 
@@ -718,7 +546,6 @@ class CommandEditorView:
             self._debounce_timer = None
 
         self._apply_highlights()
-        self._mark_dirty()
 
     # ── Load / Save ───────────────────────────────────────────────────────────
 
@@ -743,10 +570,6 @@ class CommandEditorView:
         self._lines_lbl.value = str(lines)
         self._chars_lbl.value = str(len(content))
 
-        self._update_dest_indicator((self._prefix_field.value or '').strip())
-
-        self._clear_dirty()
-
         self._apply_highlights()
 
     def _save(self, _):
@@ -756,19 +579,16 @@ class CommandEditorView:
 
         if not name:
             self._name_field.error_text = _t('name_required')
-            if self._page:
-                self._page.update()
+            self._page.update()
             return
 
         self._name_field.error_text = None
-        self._cmd_path = _write_cmd_file(
+        self._cmd_path              = _write_cmd_file(
             self._bot_dir, name, prefix, content, self._cmd_path
         )
         self._title_text.value = _ar(name + '.py')
-        self._clear_dirty()
-        if self._page:
-            self._page.update()
-            
+        self._page.update()
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  CommandsListView
 # ══════════════════════════════════════════════════════════════════════════════
@@ -805,8 +625,7 @@ class CommandsListView:
         self._search_field.cursor_color         = g('accent')
         if self._bot_dir:
             self._render(self._all_cmds)
-        if hasattr(self, '_page') and self._page:
-            self._page.update()
+        self._page.update()
 
     # ── Build ─────────────────────────────────────────────────────────────────
 
@@ -891,8 +710,7 @@ class CommandsListView:
         else:
             for idx, cmd in enumerate(cmds, start=1):
                 self._list_col.controls.append(self._cmd_row(idx, cmd))
-        if self._page:
-            self._page.update()
+        self._page.update()
 
     def _cmd_row(self, num: int, cmd: dict) -> ft.Control:
         is_event = cmd.get('is_event', False)
@@ -1000,20 +818,17 @@ class BotCommandsTab:
         self._bot_dir = bot_dir
         self._list_view.load(bot_dir)
         self._container.content = self._list_view.build()
-        if self._page:
-            self._page.update()
+        self._page.update()
 
     def _open_editor(self, cmd_data=None):
         self._editor_view.load(self._bot_dir, cmd_data)
         self._container.content = self._editor_view.build()
-        if self._page:
-            self._page.update()
+        self._page.update()
 
     def _close_editor(self):
         self._list_view.load(self._bot_dir)
         self._container.content = self._list_view.build()
-        if self._page:
-            self._page.update()
+        self._page.update()
 
 
 # ══════════════════════════════════════════════════════════════════════════════

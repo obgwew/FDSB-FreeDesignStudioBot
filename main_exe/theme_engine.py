@@ -53,6 +53,15 @@ class _ThemeEngine:
         with self._lock:
             self._current_data = data
 
+        for module_name in ('BCFD', 'main_exe.BCFD'):
+            try:
+                import importlib
+                mod = importlib.import_module(module_name)
+                if hasattr(mod, 'THEME'):
+                    mod.THEME.update(data)
+            except Exception:
+                pass
+
         self._notify(data)
 
     # ── Notify ────────────────────────────────────────────────────────────────
