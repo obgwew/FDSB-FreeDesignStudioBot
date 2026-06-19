@@ -66,6 +66,15 @@
   - add 2 languages Fr(French) & De(German)
 
 **After the 2.2.1 update, the project name will officially become FDSB**
+
+- **2.2.2** - Big Repair & Add Languages & Fixed Ui(flet) Command view
+  - Fixed more commands & vars
+  - Fixed Color-Code
+  - Fixed some ui on view command
+  - Fixed some ui on view command
+  - Fix server
+  - add 3 languages ch(chinese) & ru(russian) & tr(turkish)
+
 ---
 
 **Developers:** @y.lw (contributor) · [@obgwew](https://github.com/obgwew) (programming)
