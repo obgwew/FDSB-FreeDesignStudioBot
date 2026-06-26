@@ -1,11 +1,9 @@
-welcome to update 2.2.2
+welcome to update 2.2.3
 
-- Fixed server
+- APK compatibility
 
-- Fixed some ui on view command
+- Some Fixed commands
 
-- Fixed Color-Code
+- Increased stability
 
-- Fixing more commands & vars
-
-- add 3 languages ch(chinese) & ru(russian) & tr(turkish)
+- Smooth control

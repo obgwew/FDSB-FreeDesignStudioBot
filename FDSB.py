@@ -5,13 +5,95 @@
 # FDSB.py (root) . Flet 0.80+ / v1 API
 
 import os
-import webbrowser
+import re
+import sys
 import json
 import shutil
 import logging
 import asyncio
 
 import flet as ft
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  PLATFORM DETECTION 
+# ══════════════════════════════════════════════════════════════════════════════
+
+def get_platform() -> str:
+    env = os.getenv('FLET_PLATFORM', '').lower()
+    if env in ('android', 'ios', 'windows', 'macos', 'linux', 'web'):
+        return env
+    if sys.platform.startswith('win'):
+        return 'windows'
+    if sys.platform.startswith('darwin'):
+        return 'macos'
+    if sys.platform.startswith('linux'):
+        return 'linux'
+    return 'unknown'
+
+
+def is_mobile() -> bool:
+    return get_platform() in ('android', 'ios')
+
+
+def is_desktop() -> bool:
+    return get_platform() in ('windows', 'macos', 'linux')
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  WINDOW CONFIGURATION
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _configure_window(page: ft.Page):
+    platform = get_platform()
+
+    if platform == 'windows':
+        page.window.width  = 1350
+        page.window.height = 700
+
+    elif platform in ('macos', 'linux'):
+        page.window.width      = 420
+        page.window.height     = 720
+        page.window.min_width  = 360
+        page.window.min_height = 600
+        page.window.resizable  = False
+
+    elif platform in ('android', 'ios'):
+        page.padding = 0 
+
+    elif platform == 'web':
+        page.padding = 0
+
+    else:
+        page.window.width  = 420
+        page.window.height = 720
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  PERSISTENT STORAGE PATHS (writable — settings, bot configs, app_data/)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def get_persistent_base_dir() -> str:
+    storage_data = os.getenv('FLET_APP_STORAGE_DATA')
+    if storage_data:
+        return storage_data
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+def get_app_data_dir() -> str:
+    path = os.path.join(get_persistent_base_dir(), 'app_data')
+    os.makedirs(path, exist_ok=True)
+    return path
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  BUNDLED RESOURCE PATHS (read-only — icons, fonts shipped inside the app)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def get_resource_path(*parts: str) -> str:
+    base = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base, *parts)
+
 
 from main_exe.langs.translations import Translations
 from main_exe.settings import get_current_lang, get_current_theme, apply_theme_globally
@@ -22,10 +104,7 @@ logging.getLogger('discord').setLevel(logging.INFO)
 
 import main_exe.core_fdsb.local_server
 
-icon_path = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)),
-    'main_exe', 'icons', 'BCFD.png'
-)
+icon_path = get_resource_path('main_exe', 'icons', 'FDSB.png')
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  TRANSLATION HELPER
@@ -41,7 +120,7 @@ def _ar(text: str) -> str:
 #  STORAGE
 # ══════════════════════════════════════════════════════════════════════════════
 
-APP_DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'app_data')
+APP_DATA_DIR = get_app_data_dir()
 
 
 def ensure_app_data_dir():
@@ -102,6 +181,25 @@ def bot_exists(bot_name: str) -> bool:
     return os.path.isfile(
         os.path.join(get_bot_dir(bot_name), 'bot_files', 'config.json')
     )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  TOKEN VALIDATOR
+# ══════════════════════════════════════════════════════════════════════════════
+
+DISCORD_TOKEN_RE = re.compile(
+    r'^[A-Za-z0-9_-]{24,28}'   # Part 1
+    r'\.'
+    r'[A-Za-z0-9_-]{6}'        # Part 2
+    r'\.'
+    r'[A-Za-z0-9_-]{27,38}$'   # Part 3
+)
+
+
+def is_valid_discord_token(token: str) -> bool:
+    if token == 'admin':
+        return True
+    return bool(DISCORD_TOKEN_RE.match(token))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -372,10 +470,22 @@ class CreateBotDialog:
     def _submit(self, _):
         name  = self._name_field.value.strip() or 'My Bot'
         token = self._token_field.value.strip()
+
+        # ── 1. التحقق من وجود التوكن ──────────────────────────────────
         if not token:
             self._token_field.error_text = _t('token_required')
             self._page.update()
             return
+
+        if not is_valid_discord_token(token):
+            self._token_field.error_text = (
+                _t('token_invalid_format')
+                or 'Invalid token format. Expected:\nXXXXXXXXXXXXXXXXXXXXXXXX.XXXXXX.XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
+            )
+            self._page.update()
+            return
+
+        self._token_field.error_text = None
         self._page.pop_dialog()
         self._on_create({'name': name, 'token': token, 'image': self._img_path})
 
@@ -383,6 +493,9 @@ class CreateBotDialog:
         self._page.pop_dialog()
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+#  MAIN VIEW
+# ══════════════════════════════════════════════════════════════════════════════
 
 class MainView:
 
@@ -404,6 +517,9 @@ class MainView:
         )
 
         self._load_saved_bots()
+
+    async def _open_link(self, url: str):
+        await self._page.launch_url(url)
 
     # ── public ───────────────────────────────────────────────────────
 
@@ -443,7 +559,7 @@ class MainView:
                             shape=ft.RoundedRectangleBorder(radius=20),
                             padding=ft.Padding(left=12, top=8, right=12, bottom=8),
                         ),
-                        on_click=lambda _: webbrowser.open('https://discord.gg/JngaJRC6Y9'),
+                        on_click=lambda _: self._page.run_task(self._open_link, 'https://discord.gg/JngaJRC6Y9'),
                     ),
                     ft.FilledButton(
                         content=ft.Row(
@@ -457,7 +573,7 @@ class MainView:
                             shape=ft.RoundedRectangleBorder(radius=20),
                             padding=ft.Padding(left=12, top=8, right=12, bottom=8),
                         ),
-                        on_click=lambda _: webbrowser.open('https://github.com/Aksjuwu/BCFD-L'),
+                        on_click=lambda _: self._page.run_task(self._open_link, 'https://github.com/obgwew/FDSB'),
                     ),
                     ft.Container(expand=True),
                     ft.FilledButton(
@@ -524,15 +640,15 @@ class MainView:
 
     def _start_bot(self, data):
         try:
-            main_exe.core_bcfd.local_server.start_bot(data.get('token', ''))
+            main_exe.core_fdsb.local_server.start_bot(data.get('bot_dir', ''))
         except Exception as e:
-            print(f'[BCFD] start: {e}')
+            print(f'[FDSB] start: {e}')
 
     def _stop_bot(self, data):
         try:
-            main_exe.core_bcfd.local_server.stop_bot()
+            main_exe.core_fdsb.local_server.stop_bot()
         except Exception as e:
-            print(f'[BCFD] stop: {e}')
+            print(f'[FDSB] stop: {e}')
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -546,26 +662,32 @@ def _show_main(page: ft.Page):
         _show_dashboard(page, bot_data)
 
     view = MainView(page=page, on_open_dashboard=open_dashboard)
-    page.add(view.build())
-    page.update()
 
+    if is_mobile():
+        page.add(ft.SafeArea(content=view.build(), expand=True))
+    else:
+        page.add(view.build())
+
+    page.update()
+    
 
 def _show_dashboard(page: ft.Page, bot_data: dict):
-
     bot_name  = bot_data.get('name', 'bot')
     safe_name = "".join(
         c for c in bot_name if c.isalnum() or c in (' ', '-', '_')
     ).strip().replace(' ', '_') or 'bot'
 
-    bot_dir = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)),
-        'app_data', safe_name,
-    )
+    bot_dir = os.path.join(get_app_data_dir(), safe_name)
 
     page.clean()
 
     dashboard = BotDashboardScreen(page=page, bot_dir=bot_dir, on_back=lambda: _show_main(page))
-    page.add(dashboard.build())
+
+    if is_mobile():
+        page.add(ft.SafeArea(content=dashboard.build(), expand=True))
+    else:
+        page.add(dashboard.build())
+
     page.update()
 
 
@@ -574,16 +696,15 @@ def _show_dashboard(page: ft.Page, bot_data: dict):
 # ══════════════════════════════════════════════════════════════════════════════
 
 def main(page: ft.Page):
-    page.title          = 'BCFD'
-    page.window.icon    = icon_path
-    page.window.width   = 420
-    page.window.height  = 720
-    page.padding        = 0
+    page.title   = 'FDSB'
+    page.padding = 0
 
-    fonts_dir = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)),
-        'main_exe', 'langs', 'fonts'
-    )
+    if is_desktop():
+        page.window.icon = icon_path
+
+    _configure_window(page)
+
+    fonts_dir = get_resource_path('main_exe', 'langs', 'fonts')
     fonts = {}
     if os.path.isdir(fonts_dir):
         for file in os.listdir(fonts_dir):
@@ -604,12 +725,12 @@ def main(page: ft.Page):
         page.bgcolor = data.get('bg', '#FFFFFF')
         page.update()
 
-    page._bg_sync = _sync_page_bg         
+    page._bg_sync = _sync_page_bg
     ThemeEngine.subscribe(page._bg_sync)
     page.bgcolor = ThemeEngine.hex('bg')
 
-
     _show_main(page)
 
+
 if __name__ == '__main__':
-    ft.run(main) 
+    ft.run(main)

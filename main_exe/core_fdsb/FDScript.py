@@ -77,10 +77,22 @@ register_inline_resolver(_resolve_inline_cmd)
 # Global Condition Evaluator
 # ─────────────────────────────────────────────
 
+# تلميح الإصلاح داخل دالة evaluate_condition في ملف main_exe/core_fdsb/FDScript.py
+
 def evaluate_condition(expr: str, ctx: ExecutionContext) -> bool:
+    import re
+
+    and_match = re.match(r'^\$and\[(.+)\]$', expr.strip(), re.DOTALL)
+    if and_match:
+        return all(evaluate_condition(c, ctx) for c in _split_args(and_match.group(1)))
+
+    or_match = re.match(r'^\$or\[(.+)\]$', expr.strip(), re.DOTALL)
+    if or_match:
+        return any(evaluate_condition(c, ctx) for c in _split_args(or_match.group(1)))
+
     expr = ctx.resolve(expr).strip()
 
-    if expr.lower() == "true": return True
+    if expr.lower() == "true":  return True
     if expr.lower() == "false": return False
 
     for op in ("==", "!=", ">=", "<=", ">", "<"):
@@ -98,7 +110,6 @@ def evaluate_condition(expr: str, ctx: ExecutionContext) -> bool:
                 if op == "==": return left == right
                 if op == "!=": return left != right
     return False
-
 
 # ─────────────────────────────────────────────
 # Interpreter
@@ -397,9 +408,12 @@ class Interpreter:
                 continue
 
             if execute and depth == 0:
+                resolved_text = ctx.resolve(tok)
+                if not resolved_text.strip():
+                    i += 1
+                    continue
                 ctx.stop_typing()
                 dest = await ctx.get_dest()
-                resolved_text = ctx.resolve(tok)
                 if getattr(ctx, "is_global_reply", False):
                     sent = await ctx.message.reply(resolved_text)
                 else:

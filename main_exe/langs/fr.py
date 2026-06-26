@@ -3,7 +3,7 @@
 
 FRENCH_DICT = {
     # ── Interface principale ──────────────────────────────────
-    'main_title':          (1001, 'BCFD-L'),
+    'main_title':          (1001, 'FDSB'),
     'no_bots_hint':        (1002, 'Aucun bot trouvé. Cliquez sur "Nouveau bot" pour en créer un.'),
     'new_bot':             (1003, 'Nouveau bot'),
     'discord':             (1004, 'Discord'),
@@ -37,6 +37,10 @@ FRENCH_DICT = {
     'variables':           (1028, 'Variables'),
     'settings':            (1029, 'Paramètres'),
     'avatar_none':         (1030, 'Sans avatar'),
+    'tab_main':            (1117, 'Principal'),
+    'tab_commands':        (1118, 'Commandes'),
+    'tab_variables':       (1119, 'Variables'),
+    'tab_settings':        (1120, 'Paramètres'),
 
     # ── Paramètres ────────────────────────────────────────────
     'general_section':     (1031, 'Général'),

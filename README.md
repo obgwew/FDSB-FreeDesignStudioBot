@@ -76,6 +76,12 @@
   - Fix server
   - add 3 languages ch(chinese) & ru(russian) & tr(turkish)
 
+- **2.2.3** - Exclusive Version For Phones(only Android)
+  - APK compatibility
+  - Some Fixed commands
+  - Increased stability
+  - Smooth control
+
 ---
 
 **Developers:** @y.lw (contributor) · [@obgwew](https://github.com/obgwew) (programming)

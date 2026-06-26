@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-# main_exe/langs/zh_tw.py
+# main_exe/langs/ch.py
 
 CHINESE_DICT = {
     # ── 主介面 ────────────────────────────────────
-    'main_title':          (1001, 'BCFD-L'),
+    'main_title':          (1001, 'FDSB'),
     'no_bots_hint':        (1002, '未找到機器人。點擊「新增機器人」來建立一個。'),
     'new_bot':             (1003, '新增機器人'),
     'discord':             (1004, 'Discord'),
@@ -37,6 +37,10 @@ CHINESE_DICT = {
     'variables':           (1028, '變數'),
     'settings':            (1029, '設定'),
     'avatar_none':         (1030, '無頭像'),
+    'tab_main':            (1117, '主頁'),
+    'tab_commands':        (1118, '指令'),
+    'tab_variables':       (1119, '變數'),
+    'tab_settings':        (1120, '設定'),
 
     # ── 設定 ─────────────────────────────────────────
     'general_section':     (1031, '一般'),

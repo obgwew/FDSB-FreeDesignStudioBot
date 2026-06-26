@@ -3,7 +3,8 @@ import discord
 from main_exe.core_fdsb.FDCore import (
     ExecutionContext, Command,
     FDLogicError, FDRuntimeError,
-    _send_error, _load_data, _save_data, _truncate,
+    _send_error, _load_data, _save_data,
+    _load_ids_data, _save_ids_data, _truncate,
 )
 
 def _fmt(err) -> str:
@@ -13,27 +14,45 @@ def resolve_inline(args: list[str], ctx: ExecutionContext) -> str:
     return _fmt(FDLogicError("`$setVar` cannot be used inline — use it as a standalone command."))
 
 async def execute(cmd: Command, args: list[str], ctx: ExecutionContext, ch: discord.abc.Messageable) -> None:
-    if len(args) != 2:
+    if len(args) == 3:
+        name    = args[0].strip()
+        value   = args[1]
+        user_id = args[2].strip()
+
+        if not name:
+            await _send_error(ch, FDLogicError("`$setVar` — variable name cannot be empty."))
+        if not user_id:
+            await _send_error(ch, FDLogicError("`$setVar` — user ID cannot be empty."))
+
+        data = _load_ids_data()
+        if name not in data:
+            data[name] = {}
+        data[name][user_id] = value
+        _save_ids_data(data)
+        ctx.log_event(f"setVar [{name}] for user {user_id} ← {_truncate(value)!r} (persistent)")
+
+    elif len(args) == 2:
+        name  = args[0].strip()
+        value = args[1]
+
+        if not name:
+            await _send_error(ch, FDLogicError(
+                "`$setVar` — variable name cannot be empty."
+            ))
+
+        data = _load_data()
+
+        if name not in data:
+            await _send_error(ch, FDRuntimeError(
+                f"`$setVar[{name}]` — variable `{name}` does not exist.\n"
+                f"Tip: Create it first from the Variables tab in BCFD."
+            ))
+
+        data[name] = value
+        _save_data(data)
+        ctx.log_event(f"setVar [{name}] ← {_truncate(value)!r} (persistent)")
+
+    else:
         await _send_error(ch, FDLogicError(
-            "`$setVar` requires two arguments: `$setVar[name; value]`"
+            "`$setVar` requires 2 or 3 arguments: `$setVar[name; value]` or `$setVar[name; value; user_id]`"
         ))
-
-    name  = args[0].strip()
-    value = args[1]
-
-    if not name:
-        await _send_error(ch, FDLogicError(
-            "`$setVar` — variable name cannot be empty."
-        ))
-
-    data = _load_data()
-
-    if name not in data:
-        await _send_error(ch, FDRuntimeError(
-            f"`$setVar[{name}]` — variable `{name}` does not exist.\n"
-            f"Tip: Create it first from the Variables tab in BCFD."
-        ))
-
-    data[name] = value
-    _save_data(data)
-    ctx.log_event(f"setVar [{name}] ← {_truncate(value)!r} (persistent)")

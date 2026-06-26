@@ -2,12 +2,11 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 # -*- coding: utf-8 -*-
-# main_exe/main.py . migrated to Flet 0.80+ / v1 API
+# main_exe/main.py . migrated to Flet 0.80+ / v1 API 
 
 import os
 import json
 import base64
-import webbrowser
 
 import flet as ft
 
@@ -75,6 +74,18 @@ def _ink_btn(content: ft.Control, bgcolor: str, on_click,
         width=width,
         alignment=ft.Alignment(0, 0),
     )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  Tab definitions  –  label 
+# ══════════════════════════════════════════════════════════════════════════════
+
+_TABS = [
+    ('main',      ft.Icons.HOME_ROUNDED,     'tab_main'),
+    ('commands',  ft.Icons.CODE_ROUNDED,     'tab_commands'),
+    ('variables', ft.Icons.TUNE_ROUNDED,     'tab_variables'),
+    ('settings',  ft.Icons.SETTINGS_ROUNDED, 'tab_settings'),
+]
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -165,7 +176,9 @@ class BotMainTab:
         self._news_text = ft.Text(_read_new_txt(), size=13, color=_c('text_dim'))
 
         ThemeEngine.subscribe(self._on_theme)
-
+        
+    async def _open_link(self, url: str):
+        await self._page.launch_url(url)
     # ── Helpers ───────────────────────────────────────────────────────────────
 
     def _card_border(self) -> ft.Border:
@@ -275,14 +288,13 @@ class BotMainTab:
         self._set_online_state(False)
         self._news_text.value = _read_new_txt()
 
-    def _invite_bot(self, _):
+    async def _invite_bot(self, e):
         bot_id = _get_bot_id_from_token(self._bot_data.get('token', ''))
         if bot_id:
-            webbrowser.open(
-                f'https://discord.com/oauth2/authorize'
-                f'?client_id={bot_id}&permissions=8&scope=bot'
-            )
-
+            url = f'https://discord.com/oauth2/authorize?client_id={bot_id}&permissions=8&scope=bot'
+            
+            await self._page.launch_url(url)
+ 
     def _toggle_server(self, _):
         new_state = not self._server_online
         self._set_online_state(new_state)
@@ -305,14 +317,6 @@ class BotMainTab:
 # ══════════════════════════════════════════════════════════════════════════════
 #  BotDashboardScreen
 # ══════════════════════════════════════════════════════════════════════════════
-
-_TABS = [
-    ('main',      ft.Icons.HOME_ROUNDED,     'Main'),
-    ('commands',  ft.Icons.CODE_ROUNDED,     'Commands'),
-    ('variables', ft.Icons.TUNE_ROUNDED,     'Variables'),
-    ('settings',  ft.Icons.SETTINGS_ROUNDED, 'Settings'),
-]
-
 
 class BotDashboardScreen:
     def __init__(self, page: ft.Page, bot_dir: str = '', on_back=None):
@@ -349,6 +353,7 @@ class BotDashboardScreen:
             'settings':  self._settings_tab,
         }
 
+        self._tab_ids = [t[0] for t in _TABS]
         self._content = ft.Container(expand=True)
         self._nav_bar = self._build_nav()
 
@@ -362,9 +367,11 @@ class BotDashboardScreen:
     def _on_theme(self, data: dict):
         get = lambda k: data.get(k, '#888888')
         self._title_text.color        = get('text')
+        self._back_btn.bgcolor        = get('accent')
         self._nav_bar.bgcolor         = get('nav_bg')
         self._nav_bar.indicator_color = get('nav_active')
-        self._back_btn.bgcolor        = get('accent')
+
+        self._nav_bar.destinations = self._build_destinations()
 
         if hasattr(self, '_content'):
             self._content.content = self._tab_views[self._active].build()
@@ -398,34 +405,53 @@ class BotDashboardScreen:
             expand=True,
         )
 
+    def _build_destinations(self) -> list:
+        return [
+            ft.NavigationBarDestination(
+                icon=icon,
+                label=_t(label_key),
+            )
+            for _, icon, label_key in _TABS
+        ]
+
     def _build_nav(self) -> ft.NavigationBar:
-        self._tab_ids = [t[0] for t in _TABS]
         return ft.NavigationBar(
             selected_index=0,
             bgcolor=_c('nav_bg'),
             indicator_color=_c('nav_active'),
             label_behavior=ft.NavigationBarLabelBehavior.ALWAYS_SHOW,
             on_change=self._on_nav_change,
-            destinations=[
-                ft.NavigationBarDestination(
-                    icon=icon,
-                    label=label,
-                )
-                for _, icon, label in _TABS
-            ],
+            destinations=self._build_destinations(),
         )
 
     # ── Navigation ────────────────────────────────────────────────────────────
 
     def _on_nav_change(self, e):
-        tab_id = self._tab_ids[e.control.selected_index]
-        self._switch_tab(tab_id)
+        target_id  = self._tab_ids[e.control.selected_index]
+        leaving_id = self._active
+
+        if target_id == leaving_id:
+            return
+
+        def _do_switch():
+            self._switch_tab(target_id)
+
+        def _stay_on_current_tab():
+            self._nav_bar.selected_index = self._tab_ids.index(leaving_id)
+            self._page.update()
+
+        leaving_view = self._tab_views.get(leaving_id)
+        guard = getattr(leaving_view, 'guard_tab_change', None)
+        if callable(guard):
+            guard(_do_switch, _stay_on_current_tab)
+        else:
+            _do_switch()
 
     def _switch_tab(self, tab_id: str):
         self._active                  = tab_id
         self._nav_bar.selected_index  = self._tab_ids.index(tab_id)
         self._content.content         = self._tab_views[tab_id].build()
-        self._back_btn.visible        = (tab_id == 'main')   # ← هنا
+        self._back_btn.visible        = (tab_id == 'main')
         self._page.update()
 
     # ── Data ──────────────────────────────────────────────────────────────────
@@ -448,3 +474,4 @@ class BotDashboardScreen:
         self._variables_tab.load_bot(bot_files_dir)
         self._settings_tab.load_bot(bot_data)
         self._switch_tab('main')
+        

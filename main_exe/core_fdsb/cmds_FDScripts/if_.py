@@ -5,9 +5,6 @@ from FDScript import (
     _split_args,
 )
 
-
-# ── Condition evaluator (mirrors Interpreter._evaluate) ──────────────────────
-
 def _evaluate(expr: str, ctx: ExecutionContext) -> bool:
     import re
     expr = ctx.resolve(expr).strip()
@@ -37,9 +34,6 @@ def _evaluate(expr: str, ctx: ExecutionContext) -> bool:
 
     return False
 
-
-# ── Block runner: executes tokens[start] until it hits one of `stoppers` ─────
-
 async def _run_block_until(
     tokens: list,
     start: int,
@@ -67,10 +61,12 @@ async def _run_block_until(
 
         if execute and depth == 0:
             if isinstance(tok, str):
-                ctx.stop_typing()
-                dest = await ctx.get_dest()
-                sent = await dest.send(ctx.resolve(tok))
-                ctx.last_bot_message = sent
+                resolved = ctx.resolve(tok)
+                if resolved.strip():
+                    ctx.stop_typing()
+                    dest = await ctx.get_dest()
+                    sent = await dest.send(resolved)
+                    ctx.last_bot_message = sent
             elif tok.name not in stoppers:
                 if tok.name == "break":
                     return "break"
@@ -93,19 +89,12 @@ async def _run_block_until(
 
     return i
 
-
-# ── Main entry: handle entire if/elif/else/endif chain ───────────────────────
-
 async def execute_block(
     tokens: list,
     start: int,
     ctx: ExecutionContext,
     exec_command_fn,
 ) -> int:
-    """
-    Called with `start` pointing at the $if token.
-    Returns the index after $endif.
-    """
     i = start
     branch_taken = False
 
@@ -146,9 +135,6 @@ async def execute_block(
         i += 1
 
     return i
-
-
-# ── Standalone execute() — called when $if appears as a top-level command ────
 
 async def execute(
     cmd: Command,

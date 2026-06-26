@@ -3,7 +3,7 @@
 
 TURKISH_DICT = {
     # ── Ana Arayüz ────────────────────────────────────
-    'main_title':          (1001, 'BCFD-L'),
+    'main_title':          (1001, 'FDSB'),
     'no_bots_hint':        (1002, 'Bot bulunamadı. Oluşturmak için "Yeni Bot"a tıklayın.'),
     'new_bot':             (1003, 'Yeni Bot'),
     'discord':             (1004, 'Discord'),
@@ -37,6 +37,10 @@ TURKISH_DICT = {
     'variables':           (1028, 'Değişkenler'),
     'settings':            (1029, 'Ayarlar'),
     'avatar_none':         (1030, 'Avatar yok'),
+    'tab_main':            (1117, 'Ana Sayfa'),
+    'tab_commands':        (1118, 'Komutlar'),
+    'tab_variables':       (1119, 'Değişkenler'),
+    'tab_settings':        (1120, 'Ayarlar'),
 
     # ── Ayarlar ─────────────────────────────────────────
     'general_section':     (1031, 'Genel'),

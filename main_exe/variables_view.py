@@ -119,7 +119,8 @@ def _confirm_delete(page: ft.Page, item_name: str, on_confirm: callable):
 #  Unsaved Changes Dialog
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _confirm_unsaved(page: ft.Page, on_save: callable, on_discard: callable):
+def _confirm_unsaved(page: ft.Page, on_save: callable, on_discard: callable,
+                      on_cancel: callable = None):
     def _do_save(_):
         page.pop_dialog()
         on_save()
@@ -130,6 +131,7 @@ def _confirm_unsaved(page: ft.Page, on_save: callable, on_discard: callable):
 
     def _cancel(_):
         page.pop_dialog()
+        on_cancel and on_cancel()
 
     dlg = ft.AlertDialog(
         modal=True,
@@ -269,17 +271,35 @@ class BotVariablesTab:
 
     # ── Dirty tracking ────────────────────────────────────────────────────────
 
+    def _set_name_error(self):
+        self._name_inp.error                = _t('enter_variable_name') or 'Name is required'
+        self._name_inp.border_color         = _c('danger')
+        self._name_inp.focused_border_color = _c('danger')
+
+    def _clear_name_error(self):
+        if self._name_inp.error:
+            self._name_inp.error                = None
+            self._name_inp.border_color         = _c('card_border')
+            self._name_inp.focused_border_color = _c('accent')
+
     def _mark_dirty(self, e=None):
+        name_error_was_cleared = False
+        if e is not None and e.control is self._name_inp and self._name_inp.error:
+            self._clear_name_error()
+            name_error_was_cleared = True
+
         cur = {
             'name':  self._name_inp.value  or '',
             'value': self._value_inp.value or '',
         }
         dirty = cur != self._snapshot
-        if dirty != self._is_dirty:
+        state_changed = dirty != self._is_dirty
+        if state_changed:
             self._is_dirty          = dirty
             self._dirty_dot.visible = dirty
-            if self._page:
-                self._page.update()
+
+        if (state_changed or name_error_was_cleared) and self._page:
+            self._page.update()
 
     def _clear_dirty(self):
         self._snapshot = {
@@ -289,24 +309,55 @@ class BotVariablesTab:
         self._is_dirty          = False
         self._dirty_dot.visible = False
 
-    # ── Back with guard ───────────────────────────────────────────────────────
+    @property
+    def is_dirty(self) -> bool:
+        return self._current_view == 'editor' and self._is_dirty
 
-    def _request_back(self, _):
+    def guard_navigation(self, on_proceed: callable, on_cancel: callable = None):
         if self._is_dirty:
             _confirm_unsaved(
                 self._page,
-                on_save=self._save_then_back,
-                on_discard=self._discard_and_back,
+                on_save=lambda: self._save_then_proceed(on_proceed, on_cancel),
+                on_discard=lambda: self._discard_and_proceed(on_proceed),
+                on_cancel=on_cancel,
             )
         else:
-            self._show_list()
+            on_proceed and on_proceed()
 
-    def _save_then_back(self):
-        self._save_variable(None)
+    def guard_tab_change(self, on_proceed: callable, on_cancel: callable = None):
+        """
+        يُستدعى من BotDashboardScreen عند محاولة تغيير التاب.
+        نلف on_proceed بدالة تُعيد تحميل المتغيرات من القرص
+        وتُعيد الواجهة إلى وضع القائمة قبل الانتقال،
+        سواء كان الحفظ يدوياً أو عبر ديالوج التحذير.
+        """
+        def _reset_then_proceed():
+            # ── إعادة تحميل من القرص لضمان ظهور آخر تغيير ───────────────
+            _sync_fdcore(self._bot_dir)
+            self._variables    = _load_all_vars(self._bot_dir)
+            self._current_view = 'list'
+            self._refresh_list()
+            self._container.content = self._list_root
+            # ── الانتقال للتاب المطلوب ─────────────────────────────────────
+            on_proceed and on_proceed()
 
-    def _discard_and_back(self):
+        if self.is_dirty:
+            self.guard_navigation(_reset_then_proceed, on_cancel)
+        else:
+            _reset_then_proceed()
+
+    def _save_then_proceed(self, on_proceed, on_cancel: callable = None):
+        if self._perform_save():
+            on_proceed and on_proceed()
+        else:
+            on_cancel and on_cancel()
+
+    def _discard_and_proceed(self, on_proceed):
         self._clear_dirty()
-        self._show_list()
+        on_proceed and on_proceed()
+
+    def _request_back(self, _):
+        self.guard_navigation(self._show_list)
 
     # ── Theme ─────────────────────────────────────────────────────────────────
 
@@ -337,6 +388,11 @@ class BotVariablesTab:
         self._value_lbl.color                = g('text_dim')
         self._editor_card.bgcolor            = g('card_bg')
         self._editor_card.border             = _border_all(1, g('card_border'))
+
+        if self._name_inp.error:
+            err_color = g('danger')
+            self._name_inp.border_color         = err_color
+            self._name_inp.focused_border_color = err_color
 
         if self._current_view == 'list':
             self._refresh_list()
@@ -556,11 +612,11 @@ class BotVariablesTab:
     # ── View switching ────────────────────────────────────────────────────────
 
     def _show_list(self):
+        # لا حاجة لـ _load_all_vars هنا — _refresh_list ستتكفل بذلك
         _sync_fdcore(self._bot_dir)
-        self._variables    = _load_all_vars(self._bot_dir)
-        self._current_view = 'list'
-        self._refresh_list()
+        self._current_view      = 'list'
         self._container.content = self._list_root
+        self._refresh_list()   # ← هي من تُحمّل وتُنظّف وتُحدّث
         self._page.update()
 
     def _open_editor(self, var_path: str):
@@ -578,8 +634,7 @@ class BotVariablesTab:
             self._value_inp.value    = var.get('value', '')
             self._editor_title.value = _ar(f'{name}.json')
 
-        self._name_inp.error_text = None
-
+        self._clear_name_error()
         self._clear_dirty()
 
         self._container.content = self._editor_root
@@ -587,22 +642,42 @@ class BotVariablesTab:
 
     # ── List rendering ────────────────────────────────────────────────────────
 
-    def _refresh_list(self):
-        self._grid.controls.clear()
-        q = (self._search_inp.value or '').strip().lower()
+    # ══════════════════════════════════════════════════════════════════════════════
+#  List rendering  — النسخة المُصلَحة
+# ══════════════════════════════════════════════════════════════════════════════
 
+    def _refresh_list(self):
+        # ── إعادة تحميل طازجة من القرص في كل مرة ─────────────────────────────
+        # هذا يمنع التكرار الوهمي الناتج عن تداخل استدعاءات متعددة
+        if self._bot_dir:
+            self._variables = _load_all_vars(self._bot_dir)
+
+        # ── dedup بالـ path كخط دفاع أخير ────────────────────────────────────
+        seen   = set()
+        unique = []
+        for v in self._variables:
+            key = v.get('_path', id(v))
+            if key not in seen:
+                seen.add(key)
+                unique.append(v)
+        self._variables = unique
+    
+        # ── مسح القائمة وإعادة بنائها ────────────────────────────────────────
+        self._grid.controls.clear()
+    
+        q = (self._search_inp.value or '').strip().lower()
         filtered = [
             v for v in self._variables
             if not q
             or q in v.get('name',  '').lower()
             or q in v.get('value', '').lower()
         ]
-
+    
         self._empty_lbl.visible = (len(filtered) == 0)
-
+    
         for num, var in enumerate(filtered, start=1):
             self._grid.controls.append(self._var_card(num, var))
-
+    
         self._page.update()
 
     def _var_card(self, num: int, var: dict) -> ft.Control:
@@ -677,27 +752,46 @@ class BotVariablesTab:
         _sync_fdcore(self._bot_dir)
         self._show_list()
 
-    # ── Save ─────────────────────────────────────────────────────────────────
+    # ── Save ──────────────────────────────────────────────────────────────────
 
-    def _save_variable(self, _):
+    def _perform_save(self) -> bool:
         name  = (self._name_inp.value  or '').strip()
         value = (self._value_inp.value or '').strip()
 
         if not name:
-            self._name_inp.error_text = _t('enter_variable_name') or 'Name is required'
-            self._page.update()
-            return
+            self._set_name_error()
+            if self._page:
+                self._page.update()
+            return False
 
-        self._name_inp.error_text = None
+        self._clear_name_error()
 
         if not self._bot_dir:
             print('[Variables] bot_dir not set')
-            return
+            return False
 
+        # ── الكتابة الفعلية على القرص ──────────────────────────────────────
         self._edit_path = _write_var(
             self._bot_dir, name, value, self._edit_path
         )
         _sync_fdcore(self._bot_dir)
 
+        # ── تحديث عنوان المحرر ────────────────────────────────────────────
+        self._editor_title.value = _ar(f'{name}.json')
+
+        # ── تحديث self._variables فوراً من القرص ──────────────────────────
+        self._variables = _load_all_vars(self._bot_dir)
+
         self._clear_dirty()
-        self._show_list()
+
+        if self._page:
+            self._page.update()
+
+        return True
+
+    def _save_variable(self, _):
+        """زر الحفظ اليدوي: يحفظ ثم يعود للقائمة."""
+        if self._perform_save():
+            self._show_list()
+            
+#_show_list

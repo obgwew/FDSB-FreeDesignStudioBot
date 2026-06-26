@@ -68,6 +68,37 @@ def _save_data(data: dict):
 
 
 # ─────────────────────────────────────────────
+# User-specific (per-user) variable storage
+# ─────────────────────────────────────────────
+
+def _get_ids_data_dir() -> str:
+    if not _VARS_DIR:
+        return ''
+    return os.path.join(os.path.dirname(_VARS_DIR), 'bot_ids')
+
+def _get_ids_data_path() -> str:
+    return os.path.join(_get_ids_data_dir(), 'ids_data.json')
+
+def _load_ids_data() -> dict:
+    path = _get_ids_data_path()
+    if not path or not os.path.isfile(path):
+        return {}
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def _save_ids_data(data: dict):
+    path = _get_ids_data_path()
+    if not path:
+        return
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+# ─────────────────────────────────────────────
 # Reserved command names
 # ─────────────────────────────────────────────
 
@@ -702,8 +733,9 @@ class ExecutionContext:
             parts = [x.strip() for x in inner.split(';')]
             if len(parts) != 2:
                 self._abort_with_error(FDLogicError(f"`${cmd_name}` requires exactly 2 arguments (e.g. `${cmd_name}[1; 2]`)"))
+            a = float(parts[0]) if parts[0] else 0.0
+            b = float(parts[1]) if parts[1] else 0.0
             try:
-                a, b = float(parts[0]), float(parts[1])
                 if cmd_name == 'sum':  res = a + b
                 elif cmd_name == 'sub': res = a - b
                 elif cmd_name == 'mul': res = a * b
@@ -719,23 +751,35 @@ class ExecutionContext:
         if cmd_name == 'randomint':
             parts = [x.strip() for x in inner.split(';')]
             if len(parts) == 2:
-                try:
-                    a, b = int(float(parts[0])), int(float(parts[1]))
-                    return str(random.randint(min(a, b), max(a, b)))
-                except Exception:
-                    self._abort_with_error(FDRuntimeError("`$randomint` — Non-numeric arguments. You must provide numbers only."))
+                a = int(float(parts[0])) if parts[0] else 0
+                b = int(float(parts[1])) if parts[1] else 0
+                return str(random.randint(min(a, b), max(a, b)))
             self._abort_with_error(FDLogicError("`$randomint` requires two arguments: `$randomint[min; max]`"))
         if cmd_name == 'randomstr':
             parts = [p.strip() for p in inner.split(';') if p.strip()]
             return random.choice(parts) if parts else ""
         if cmd_name == 'getVar':
-            key = inner.strip()
-            if not key:
-                return FDLogicError("`$getVar[]` — variable name cannot be empty").msg
-            data = _load_data()
-            return str(data.get(key, ''))
+            parts = [x.strip() for x in inner.split(';')]
+            if len(parts) == 2:
+                name, user_id = parts
+                if not name:
+                    return FDLogicError("`$getVar[]` — variable name cannot be empty").msg
+                if not user_id:
+                    return FDLogicError("`$getVar[]` — user ID cannot be empty").msg
+                data = _load_ids_data()
+                return str(data.get(name, {}).get(user_id, ''))
+            elif len(parts) == 1:
+                key = parts[0]
+                if not key:
+                    return FDLogicError("`$getVar[]` — variable name cannot be empty").msg
+                data = _load_data()
+                return str(data.get(key, ''))
+            else:
+                return FDLogicError(
+                    "`$getVar[]` requires 1 or 2 arguments: `$getVar[name]` or `$getVar[name; user_id]`"
+                ).msg
         if _inline_resolver is not None:
-            args = [x.strip() for x in inner.split(';')] if inner.strip() else []
+            args = _split_args(inner) if inner.strip() else []
             val = _inline_resolver(cmd_name, args, self)
             if val is not None:
                 return val

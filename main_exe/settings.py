@@ -2,14 +2,13 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 # -*- coding: utf-8 -*-
-# main_exe/settings.py . migrated to Flet 0.80+ / v1 API
+# main_exe/settings.py . migrated to Flet 0.80+ / v1 API u
 
 import os
 import sys
 import json
 import time
 import zipfile
-import webbrowser
 import random
 import shutil
 import subprocess
@@ -20,12 +19,32 @@ from main_exe.langs.translations import Translations
 from main_exe.theme_engine import ThemeEngine
 
 # ══════════════════════════════════════════════════════════════════════════════
+#  PERSISTENT STORAGE PATHS (writable — settings, bot configs, app_data/)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def is_mobile() -> bool:
+    return os.getenv('FLET_PLATFORM', '').lower() in ('android', 'ios')
+
+
+def get_persistent_base_dir() -> str:
+    storage_data = os.getenv('FLET_APP_STORAGE_DATA')
+    if storage_data:
+        return storage_data
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def get_app_data_dir() -> str:
+    path = os.path.join(get_persistent_base_dir(), 'app_data')
+    os.makedirs(path, exist_ok=True)
+    return path
+
+# ══════════════════════════════════════════════════════════════════════════════
 #  Settings file path
 # ══════════════════════════════════════════════════════════════════════════════
 
-_SETTINGS_PATH = os.path.normpath(
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'app_data/settings.json')
-)
+_SETTINGS_PATH = os.path.join(get_app_data_dir(), 'settings.json')
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  Read / Write settings
@@ -112,7 +131,7 @@ _LANG_LABELS: dict[str, str] = {
     'tr': 'Türkçe',
     'ch': '中文',
     'ru': 'Русский',
-        
+
     # soon...
     'es': 'Español',
     'ja': '日本語',
@@ -329,12 +348,21 @@ def apply_theme_globally(theme_key: str):
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _restart_app(page: ft.Page = None):
-    base_dir  = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    bcfd_path = os.path.normpath(os.path.join(base_dir, 'FDSB.py'))
-    try:
-        subprocess.Popen([sys.executable, bcfd_path])
-    except Exception as e:
-        print(f'[Settings] Relaunch failed: {e}')
+    if is_mobile():
+        return
+
+    if getattr(sys, 'frozen', False):
+        try:
+            subprocess.Popen([sys.executable])
+        except Exception as e:
+            print(f'[Settings] Relaunch failed: {e}')
+    else:
+        base_dir  = get_persistent_base_dir()
+        fdsb_path = os.path.normpath(os.path.join(base_dir, 'FDSB.py'))
+        try:
+            subprocess.Popen([sys.executable, fdsb_path])
+        except Exception as e:
+            print(f'[Settings] Relaunch failed: {e}')
 
     if page is not None:
         for _attempt in (
@@ -445,9 +473,10 @@ class BotSettingsTab:
         self._design_col = ft.Column(spacing=4)
         self._lang_dropdown: ft.Dropdown = None
 
-        # root column reference — set in build(), used by _rebuild_in_place()
         self._root_col: ft.Column = None
-
+        
+    async def _open_link(self, url: str):
+        await self._page.launch_url(url)
     # ── Build ─────────────────────────────────────────────────────────────────
 
     def build(self) -> ft.Control:
@@ -474,10 +503,6 @@ class BotSettingsTab:
     # ── In-place rebuild (language change without parent callback) ────────────
 
     def _rebuild_in_place(self):
-        """Rebuild every section in the current column — no parent callback
-        needed. Mirrors what the theme fallback does for buttons, but for
-        the full tab content. Safe to call from any code path that needs a
-        UI refresh without restarting the app."""
         if self._root_col is None:
             return
         inner = self._root_col.controls[0]
@@ -843,7 +868,7 @@ class BotSettingsTab:
                         icon=ft.Icons.OPEN_IN_NEW_ROUNDED,
                         icon_color=_c('text_dim'),
                         icon_size=16,
-                        on_click=lambda _, u=url: webbrowser.open(u),
+                        on_click=lambda _, u=url: self._page.run_task(self._open_link, u),
                         style=ft.ButtonStyle(shape=ft.CircleBorder()),
                     ),
                 ],
@@ -917,7 +942,7 @@ class BotSettingsTab:
             self._page.update()
             return
 
-        base_dir   = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        base_dir   = get_persistent_base_dir()
         export_dir = os.path.normpath(os.path.join(base_dir, 'app_data', 'exports'))
         os.makedirs(export_dir, exist_ok=True)
 
@@ -956,7 +981,7 @@ class BotSettingsTab:
                     subprocess.Popen(['explorer', '/select,', zip_path])
                 elif sys.platform == 'darwin':
                     subprocess.Popen(['open', '-R', zip_path])
-                else:
+                elif not is_mobile():
                     subprocess.Popen(['xdg-open', export_dir])
             except Exception:
                 pass
@@ -990,7 +1015,7 @@ class BotSettingsTab:
             self._page.update()
             return
 
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        base_dir = get_persistent_base_dir()
         bot_name = self._bot_data.get('name', '')
 
         if bot_name:
@@ -1004,6 +1029,10 @@ class BotSettingsTab:
 
         if self._on_bot_save:
             self._on_bot_save({})
+
+        if is_mobile():
+            self._rebuild_in_place()
+            return
 
         _restart_app(self._page)
 

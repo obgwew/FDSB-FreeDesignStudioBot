@@ -28,8 +28,13 @@ async def execute(cmd: Command, args: list[str], ctx: ExecutionContext, ch: disc
     op  = m.group(1) or '='
     num = int(m.group(2))
 
-    words      = ctx.message.content.strip().split()
-    word_count = len(words) if ctx.is_event else max(0, len(words))
+    if ctx.is_event:
+        word_count = len(ctx.message.content.strip().split())
+    else:
+        full       = ctx.message.content.strip()
+        parts      = full.split(None, 1)
+        args_str   = parts[1] if len(parts) > 1 else ""
+        word_count = len(args_str.split()) if args_str.strip() else 0
 
     ok = {
         '>': word_count >  num,

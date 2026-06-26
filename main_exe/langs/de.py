@@ -3,7 +3,7 @@
 
 GERMAN_DICT = {
     # ── Hauptschnittstelle ────────────────────────────────────
-    'main_title':          (1001, 'BCFD-L'),
+    'main_title':          (1001, 'FDSB'),
     'no_bots_hint':        (1002, 'Keine Bots gefunden. Klicken Sie auf "Neuer Bot", um einen zu erstellen.'),
     'new_bot':             (1003, 'Neuer Bot'),
     'discord':             (1004, 'Discord'),
@@ -37,6 +37,10 @@ GERMAN_DICT = {
     'variables':           (1028, 'Variablen'),
     'settings':            (1029, 'Einstellungen'),
     'avatar_none':         (1030, 'Kein Avatar'),
+    'tab_main':            (1117, 'Hauptseite'),
+    'tab_commands':        (1118, 'Befehle'),
+    'tab_variables':       (1119, 'Variablen'),
+    'tab_settings':        (1120, 'Einstellungen'),
 
     # ── Einstellungen ─────────────────────────────────────────
     'general_section':     (1031, 'Allgemein'),

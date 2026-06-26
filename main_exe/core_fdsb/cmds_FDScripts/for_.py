@@ -39,9 +39,12 @@ async def _run_slice(
         i += 1
 
         if isinstance(tok, str):
+            resolved_text = ctx.resolve(tok)
+            if not resolved_text.strip():
+                continue
             ctx.stop_typing()
             dest = await ctx.get_dest()
-            sent = await dest.send(ctx.resolve(tok))
+            sent = await dest.send(resolved_text)
             ctx.last_bot_message = sent
             continue
 

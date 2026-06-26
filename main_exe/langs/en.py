@@ -3,7 +3,7 @@
 
 ENGLISH_DICT = {
     # ── Main Interface ────────────────────────────────────────
-    'main_title':          (1001, 'BCFD-L'),
+    'main_title':          (1001, 'FDSB'),
     'no_bots_hint':        (1002, 'No bots found. Click "New Bot" to create one.'),
     'new_bot':             (1003, 'New Bot'),
     'discord':             (1004, 'Discord'),
@@ -37,6 +37,10 @@ ENGLISH_DICT = {
     'variables':           (1028, 'Variables'),
     'settings':            (1029, 'Settings'),
     'avatar_none':         (1030, 'No Avatar'),
+    'tab_main':            (1117, 'Main'),
+    'tab_commands':        (1118, 'Commands'),
+    'tab_variables':       (1119, 'Variables'),
+    'tab_settings':        (1120, 'Settings'),
 
     # ── Settings ──────────────────────────────────────────────
     'general_section':     (1031, 'General'),
